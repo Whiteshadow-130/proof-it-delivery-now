@@ -1,7 +1,9 @@
 
+import { useNavigate } from "react-router-dom";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "@/components/ui/sonner";
 
 interface Order {
   id: string;
@@ -50,6 +52,23 @@ const mockRecentOrders = [
 ];
 
 const RecentOrders = () => {
+  const navigate = useNavigate();
+
+  const handleViewAction = (order: Order) => {
+    if (order.status === "Video Received") {
+      // Redirect to a video player page (in a real app)
+      // For now, we'll just show a toast
+      toast.success(`Viewing video for order ${order.id}`);
+    } else if (order.status === "QR Generated") {
+      // Redirect to the QR code page
+      navigate(`/qr-codes?order=${order.id}`);
+    } else if (order.status === "Video Pending") {
+      // Open the recording page in a new tab
+      const recordUrl = `${window.location.origin}/proof?order=${order.id}`;
+      window.open(recordUrl, '_blank');
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -96,6 +115,7 @@ const RecentOrders = () => {
                       variant="ghost"
                       size="sm"
                       className="text-brand-accent"
+                      onClick={() => handleViewAction(order)}
                     >
                       {order.status === "Video Received" ? "View Video" : "View QR"}
                     </Button>
@@ -111,4 +131,3 @@ const RecentOrders = () => {
 };
 
 export default RecentOrders;
-

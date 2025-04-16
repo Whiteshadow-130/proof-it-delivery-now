@@ -1,53 +1,106 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { QrCode, Plus, Download, Copy, Share2 } from "lucide-react";
+import { QrCode as QrCodeIcon, Plus, Download, Copy, Share2 } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
+import QRCode from "react-qr-code";
+import NewOrderDialog from "@/components/dashboard/NewOrderDialog";
 
-// Sample QR code URLs
-const mockQrCodes = [
+// Mock orders data - in a real app, this would come from API/backend
+const mockOrders = [
   {
-    id: "QR-12345",
-    orderId: "ORD-12345",
+    id: "ORD-12345",
     awb: "AWB123456789",
     customer: "John Doe",
     date: "2025-04-15",
-    url: "https://proof-it.com/proof?order=ORD-12345&token=abc123",
+    status: "QR Generated",
+    channel: "Amazon",
   },
   {
-    id: "QR-12346",
-    orderId: "ORD-12346",
+    id: "ORD-12346",
     awb: "AWB123456790",
     customer: "Jane Smith",
     date: "2025-04-15",
-    url: "https://proof-it.com/proof?order=ORD-12346&token=def456",
+    status: "QR Generated",
+    channel: "Shopify",
   },
   {
-    id: "QR-12347",
-    orderId: "ORD-12347",
+    id: "ORD-12347",
     awb: "AWB123456791",
     customer: "Bob Johnson",
     date: "2025-04-14",
-    url: "https://proof-it.com/proof?order=ORD-12347&token=ghi789",
+    status: "QR Generated",
+    channel: "Flipkart",
   },
   {
-    id: "QR-12348",
-    orderId: "ORD-12348",
+    id: "ORD-12348",
     awb: "AWB123456792",
     customer: "Alice Brown",
     date: "2025-04-14",
-    url: "https://proof-it.com/proof?order=ORD-12348&token=jkl012",
+    status: "QR Generated",
+    channel: "Amazon",
+  },
+  {
+    id: "ORD-12349",
+    awb: "AWB123456793",
+    customer: "Charlie Wilson",
+    date: "2025-04-13",
+    status: "QR Generated",
+    channel: "Meesho",
+  },
+  {
+    id: "ORD-12350",
+    awb: "AWB123456794",
+    customer: "Eva Green",
+    date: "2025-04-13",
+    status: "QR Generated",
+    channel: "Shopify",
+  },
+  {
+    id: "ORD-12351",
+    awb: "AWB123456795",
+    customer: "Frank Miller",
+    date: "2025-04-12",
+    status: "QR Generated",
+    channel: "Amazon",
+  },
+  {
+    id: "ORD-12352",
+    awb: "AWB123456796",
+    customer: "Grace Lee",
+    date: "2025-04-12",
+    status: "QR Generated",
+    channel: "Flipkart",
   },
 ];
 
 const QrCodes = () => {
   const [searchTerm, setSearchTerm] = useState("");
+  const [qrCodes, setQrCodes] = useState([]);
+  const [newOrderDialog, setNewOrderDialog] = useState(false);
+  const navigate = useNavigate();
+
+  // Generate QR code URLs and data on component mount
+  useEffect(() => {
+    // Generate QR codes from orders
+    const generatedQrCodes = mockOrders.map(order => ({
+      id: `QR-${order.id.split('-')[1]}`,
+      orderId: order.id,
+      awb: order.awb,
+      customer: order.customer,
+      date: order.date,
+      url: `${window.location.origin}/proof?order=${order.id}`,
+    }));
+    
+    setQrCodes(generatedQrCodes);
+  }, []);
 
   // Filter QR codes based on search
-  const filteredQrCodes = mockQrCodes.filter(
+  const filteredQrCodes = qrCodes.filter(
     (qr) =>
       searchTerm === "" ||
       qr.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -55,14 +108,57 @@ const QrCodes = () => {
       qr.customer.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleCopyUrl = (url: string) => {
+  const handleCopyUrl = (url) => {
     navigator.clipboard.writeText(url);
     toast.success("URL copied to clipboard");
   };
 
   const handleGenerateNewQR = () => {
-    toast.success("Redirecting to new order creation");
-    // In a real app, this would redirect to or open the create order dialog
+    setNewOrderDialog(true);
+  };
+
+  const handleNewOrderSubmit = (orderData) => {
+    // Create a new order ID
+    const newOrderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
+    
+    // Create new QR code
+    const newQrCode = {
+      id: `QR-${newOrderId.split('-')[1]}`,
+      orderId: newOrderId,
+      awb: orderData.awb,
+      customer: orderData.customerName,
+      date: new Date().toISOString().split('T')[0],
+      url: `${window.location.origin}/proof?order=${newOrderId}`,
+    };
+    
+    // Add to QR codes list
+    setQrCodes([newQrCode, ...qrCodes]);
+    
+    toast.success(`QR code generated for order ${newOrderId}`);
+  };
+
+  const downloadQRCode = (orderId) => {
+    const svg = document.getElementById(`qr-${orderId}`);
+    if (!svg) return;
+    
+    const svgData = new XMLSerializer().serializeToString(svg);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      const pngFile = canvas.toDataURL("image/png");
+      
+      const downloadLink = document.createElement("a");
+      downloadLink.download = `qr-${orderId}.png`;
+      downloadLink.href = pngFile;
+      downloadLink.click();
+    };
+    
+    img.src = "data:image/svg+xml;base64," + btoa(svgData);
   };
 
   return (
@@ -104,7 +200,13 @@ const QrCodes = () => {
             <CardContent className="pt-4">
               <div className="flex justify-center mb-4">
                 <div className="border border-gray-200 p-3 bg-white rounded-lg">
-                  <QrCode className="h-24 w-24 text-brand-blue" />
+                  <QRCode
+                    id={`qr-${qr.orderId}`}
+                    value={qr.url}
+                    size={128}
+                    level="M"
+                    className="h-24 w-24"
+                  />
                 </div>
               </div>
               
@@ -143,6 +245,7 @@ const QrCodes = () => {
                   variant="outline" 
                   size="sm" 
                   className="text-xs"
+                  onClick={() => downloadQRCode(qr.orderId)}
                 >
                   <Download className="h-3 w-3 mr-1" /> Download QR
                 </Button>
@@ -150,6 +253,7 @@ const QrCodes = () => {
                   variant="outline" 
                   size="sm" 
                   className="text-xs"
+                  onClick={() => handleCopyUrl(qr.url)}
                 >
                   <Share2 className="h-3 w-3 mr-1" /> Share
                 </Button>
@@ -158,6 +262,12 @@ const QrCodes = () => {
           </Card>
         ))}
       </div>
+
+      <NewOrderDialog
+        open={newOrderDialog}
+        onOpenChange={setNewOrderDialog}
+        onSubmit={handleNewOrderSubmit}
+      />
     </DashboardLayout>
   );
 };

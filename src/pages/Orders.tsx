@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,7 @@ const Orders = () => {
   const [statusFilter, setStatusFilter] = useState("all-statuses");
   const [channelFilter, setChannelFilter] = useState("all-channels");
   const [isNewOrderDialogOpen, setIsNewOrderDialogOpen] = useState(false);
+  const navigate = useNavigate();
 
   // Add a new order
   const addNewOrder = (orderData) => {
@@ -110,11 +112,16 @@ const Orders = () => {
   // Handle view actions
   const handleViewAction = (order) => {
     if (order.status === "Video Received") {
+      // Redirect to a video player page (in a real app)
+      // For now, we'll just show a toast
       toast.info(`Viewing video for order ${order.id}`);
-      // In a real app, this would open a video player or redirect to a video page
-    } else {
-      toast.info(`Viewing QR for order ${order.id}`);
-      // In a real app, this would display a QR code or redirect to a QR page
+    } else if (order.status === "QR Generated") {
+      // Redirect to the QR code page
+      navigate(`/qr-codes?order=${order.id}`);
+    } else if (order.status === "Video Pending") {
+      // Open the recording page in a new tab
+      const recordUrl = `${window.location.origin}/proof?order=${order.id}`;
+      window.open(recordUrl, '_blank');
     }
   };
 
