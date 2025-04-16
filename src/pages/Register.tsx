@@ -1,11 +1,10 @@
-
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "@/components/ui/sonner";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -17,7 +16,6 @@ const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -32,9 +30,7 @@ const Register = () => {
     setLoading(true);
 
     if (formData.password !== formData.confirmPassword) {
-      toast({
-        variant: "destructive",
-        title: "Passwords don't match",
+      toast.error("Passwords don't match", {
         description: "Please make sure your passwords match",
         icon: <AlertCircle className="h-5 w-5" />,
       });
@@ -47,15 +43,12 @@ const Register = () => {
       // Simulate API call
       await new Promise((resolve) => setTimeout(resolve, 1500));
       
-      toast({
-        title: "Registration successful",
+      toast.success("Registration successful", {
         description: "Your account has been created. Welcome to Proof-It!",
       });
       navigate("/dashboard");
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Registration failed",
+      toast.error("Registration failed", {
         description: "An error occurred. Please try again.",
         icon: <AlertCircle className="h-5 w-5" />,
       });
