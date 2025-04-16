@@ -1,9 +1,10 @@
+
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Package, Download, Search, Eye } from "lucide-react";
+import { Package, Download, Search, Eye, Plus } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,6 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import NewOrderDialog from "@/components/dashboard/NewOrderDialog";
+import { toast } from "@/components/ui/sonner";
 
 // Mock data for demonstration
 const mockOrders = [
@@ -81,12 +84,42 @@ const mockOrders = [
 ];
 
 const Orders = () => {
+  const [orders, setOrders] = useState(mockOrders);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all-statuses");
   const [channelFilter, setChannelFilter] = useState("all-channels");
+  const [isNewOrderDialogOpen, setIsNewOrderDialogOpen] = useState(false);
+
+  // Add a new order
+  const addNewOrder = (orderData) => {
+    // Create a new order object
+    const newOrder = {
+      id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
+      awb: orderData.awb,
+      customer: orderData.customerName,
+      date: new Date().toISOString().split('T')[0],
+      status: "QR Generated",
+      channel: orderData.channel,
+    };
+    
+    // Add the new order to the orders array
+    setOrders([newOrder, ...orders]);
+    toast.success(`New order ${newOrder.id} created successfully`);
+  };
+
+  // Handle view actions
+  const handleViewAction = (order) => {
+    if (order.status === "Video Received") {
+      toast.info(`Viewing video for order ${order.id}`);
+      // In a real app, this would open a video player or redirect to a video page
+    } else {
+      toast.info(`Viewing QR for order ${order.id}`);
+      // In a real app, this would display a QR code or redirect to a QR page
+    }
+  };
 
   // Filter orders based on search and filters
-  const filteredOrders = mockOrders.filter((order) => {
+  const filteredOrders = orders.filter((order) => {
     // Search filter
     const matchesSearch =
       searchTerm === "" ||
@@ -109,9 +142,14 @@ const Orders = () => {
     <DashboardLayout>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Orders</h1>
-        <Button>
-          <Download className="h-4 w-4 mr-2" /> Export Orders
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setIsNewOrderDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" /> Create Order
+          </Button>
+          <Button variant="outline">
+            <Download className="h-4 w-4 mr-2" /> Export Orders
+          </Button>
+        </div>
       </div>
 
       <Card className="mb-6">
@@ -159,7 +197,7 @@ const Orders = () => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>All Orders</CardTitle>
           <div className="text-sm text-gray-500">
-            Showing {filteredOrders.length} of {mockOrders.length} orders
+            Showing {filteredOrders.length} of {orders.length} orders
           </div>
         </CardHeader>
         <CardContent>
@@ -202,6 +240,7 @@ const Orders = () => {
                         variant="ghost"
                         size="sm"
                         className="text-brand-accent"
+                        onClick={() => handleViewAction(order)}
                       >
                         <Eye className="h-4 w-4 mr-2" />
                         {order.status === "Video Received" ? "View Video" : "View QR"}
@@ -214,6 +253,12 @@ const Orders = () => {
           </div>
         </CardContent>
       </Card>
+
+      <NewOrderDialog 
+        open={isNewOrderDialogOpen} 
+        onOpenChange={setIsNewOrderDialogOpen}
+        onSubmit={addNewOrder}
+      />
     </DashboardLayout>
   );
 };

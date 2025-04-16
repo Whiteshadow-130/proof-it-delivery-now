@@ -23,9 +23,10 @@ interface NewOrderData {
 interface NewOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSubmit: (orderData: NewOrderData) => void;
 }
 
-const NewOrderDialog = ({ open, onOpenChange }: NewOrderDialogProps) => {
+const NewOrderDialog = ({ open, onOpenChange, onSubmit }: NewOrderDialogProps) => {
   const [newOrderData, setNewOrderData] = useState<NewOrderData>({
     orderId: "",
     awb: "",
@@ -43,10 +44,20 @@ const NewOrderDialog = ({ open, onOpenChange }: NewOrderDialogProps) => {
   };
 
   const handleNewOrderSubmit = () => {
-    toast({
-      title: "Order created",
-      description: `QR code generated for order ${newOrderData.orderId}`,
-    });
+    // Basic validation
+    if (!newOrderData.awb || !newOrderData.customerName || !newOrderData.channel) {
+      toast({
+        title: "Missing Information",
+        description: "Please fill all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Submit the order
+    onSubmit(newOrderData);
+    
+    // Close the dialog and reset form
     onOpenChange(false);
     setNewOrderData({
       orderId: "",
@@ -67,20 +78,8 @@ const NewOrderDialog = ({ open, onOpenChange }: NewOrderDialogProps) => {
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="orderId" className="text-right">
-              Order ID
-            </Label>
-            <Input
-              id="orderId"
-              name="orderId"
-              className="col-span-3"
-              value={newOrderData.orderId}
-              onChange={handleNewOrderChange}
-            />
-          </div>
-          <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="awb" className="text-right">
-              AWB Number
+              AWB Number*
             </Label>
             <Input
               id="awb"
@@ -88,11 +87,12 @@ const NewOrderDialog = ({ open, onOpenChange }: NewOrderDialogProps) => {
               className="col-span-3"
               value={newOrderData.awb}
               onChange={handleNewOrderChange}
+              required
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="customerName" className="text-right">
-              Customer
+              Customer*
             </Label>
             <Input
               id="customerName"
@@ -100,11 +100,12 @@ const NewOrderDialog = ({ open, onOpenChange }: NewOrderDialogProps) => {
               className="col-span-3"
               value={newOrderData.customerName}
               onChange={handleNewOrderChange}
+              required
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="channel" className="text-right">
-              Channel
+              Channel*
             </Label>
             <Input
               id="channel"
@@ -113,6 +114,7 @@ const NewOrderDialog = ({ open, onOpenChange }: NewOrderDialogProps) => {
               className="col-span-3"
               value={newOrderData.channel}
               onChange={handleNewOrderChange}
+              required
             />
           </div>
         </div>
@@ -128,4 +130,3 @@ const NewOrderDialog = ({ open, onOpenChange }: NewOrderDialogProps) => {
 };
 
 export default NewOrderDialog;
-
