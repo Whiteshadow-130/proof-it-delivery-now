@@ -9,9 +9,22 @@ import WeeklyStats from "@/components/dashboard/WeeklyStats";
 import RecentOrders from "@/components/dashboard/RecentOrders";
 import NewOrderDialog from "@/components/dashboard/NewOrderDialog";
 import { Package, Video, PackageCheck, PackageX } from "lucide-react";
+import { useToast } from "@/components/ui/use-toast";
 
 const SellerDashboard = () => {
   const [newOrderDialog, setNewOrderDialog] = useState(false);
+  const { toast } = useToast();
+
+  const handleNewOrderSubmit = (orderData) => {
+    // Handle new order creation in the dashboard
+    toast({
+      title: "Order Created",
+      description: `Order for ${orderData.customerName} has been created successfully.`,
+    });
+    
+    // In a real application, you might want to update some state or make an API call here
+    console.log("New order created:", orderData);
+  };
 
   return (
     <DashboardLayout>
@@ -59,10 +72,10 @@ const SellerDashboard = () => {
       <NewOrderDialog
         open={newOrderDialog}
         onOpenChange={setNewOrderDialog}
+        onSubmit={handleNewOrderSubmit}
       />
     </DashboardLayout>
   );
 };
 
 export default SellerDashboard;
-
