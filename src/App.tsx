@@ -13,6 +13,10 @@ import VideoRecording from "./pages/VideoRecording";
 import OrderDetails from "./pages/OrderDetails";
 import ThankYou from "./pages/ThankYou";
 import Wallet from "./pages/Wallet";
+import Orders from "./pages/Orders";
+import QrCodes from "./pages/QrCodes";
+import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -27,7 +31,11 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<SellerDashboard />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/qr-codes" element={<QrCodes />} />
           <Route path="/wallet" element={<Wallet />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/proof" element={<OrderDetails />} />
           <Route path="/record" element={<VideoRecording />} />
           <Route path="/thank-you" element={<ThankYou />} />
