@@ -1,10 +1,9 @@
-
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Package, Download, Search, Filter, Eye } from "lucide-react";
+import { Package, Download, Search, Eye } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -83,8 +82,8 @@ const mockOrders = [
 
 const Orders = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [channelFilter, setChannelFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all-statuses");
+  const [channelFilter, setChannelFilter] = useState("all-channels");
 
   // Filter orders based on search and filters
   const filteredOrders = mockOrders.filter((order) => {
@@ -96,10 +95,12 @@ const Orders = () => {
       order.customer.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Status filter
-    const matchesStatus = statusFilter === "" || order.status === statusFilter;
+    const matchesStatus = 
+      statusFilter === "all-statuses" || order.status === statusFilter;
 
     // Channel filter
-    const matchesChannel = channelFilter === "" || order.channel === channelFilter;
+    const matchesChannel = 
+      channelFilter === "all-channels" || order.channel === channelFilter;
 
     return matchesSearch && matchesStatus && matchesChannel;
   });
@@ -132,7 +133,7 @@ const Orders = () => {
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value="all-statuses">All Statuses</SelectItem>
                 <SelectItem value="Video Received">Video Received</SelectItem>
                 <SelectItem value="QR Generated">QR Generated</SelectItem>
                 <SelectItem value="Video Pending">Video Pending</SelectItem>
@@ -143,7 +144,7 @@ const Orders = () => {
                 <SelectValue placeholder="Filter by channel" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Channels</SelectItem>
+                <SelectItem value="all-channels">All Channels</SelectItem>
                 <SelectItem value="Amazon">Amazon</SelectItem>
                 <SelectItem value="Shopify">Shopify</SelectItem>
                 <SelectItem value="Flipkart">Flipkart</SelectItem>
