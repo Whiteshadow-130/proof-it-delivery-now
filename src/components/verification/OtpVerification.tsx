@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/input-otp";
 import { toast } from "@/components/ui/sonner";
 import { CheckCircle, RefreshCw } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface OtpVerificationProps {
   orderNumber: string;
@@ -22,11 +23,28 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
   const [verifying, setVerifying] = useState(false);
   const [customerMobile, setCustomerMobile] = useState<string | null>(null);
   
-  // Get customer mobile from localStorage
+  // Fetch customer mobile from orders table
   useEffect(() => {
+    const fetchCustomerMobile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('customer_mobile')
+          .eq('order_number', orderNumber)
+          .single();
+
+        if (error) throw error;
+
+        if (data && data.customer_mobile) {
+          setCustomerMobile(data.customer_mobile);
+        }
+      } catch (error) {
+        console.error("Error fetching customer mobile:", error);
+      }
+    };
+
     if (orderNumber) {
-      const mobile = localStorage.getItem(`mobile_${orderNumber}`);
-      setCustomerMobile(mobile);
+      fetchCustomerMobile();
     }
   }, [orderNumber]);
   
@@ -44,13 +62,10 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
     setLoading(true);
     
     try {
-      // In a real app, this would be an API call to your backend
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // In development, use a fixed OTP
+      const otp = "123456";
       
-      // Simulate OTP generation
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Save OTP in localStorage (in a real app, this would be saved on your backend)
+      // Save OTP in localStorage for verification
       localStorage.setItem(`otp_${orderNumber}`, otp);
       console.log("Generated OTP:", otp); // For demo purposes only
       
@@ -74,16 +89,10 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
     setVerifying(true);
     
     try {
-      // In a real app, this would be an API call to verify the OTP
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // For demo purposes, we'll verify against our saved OTP
+      // In development, use a fixed OTP verification
       const savedOtp = localStorage.getItem(`otp_${orderNumber}`);
       
       if (savedOtp && savedOtp === otpValue) {
-        // Set verification status in localStorage
-        localStorage.setItem(`otp_verified_${orderNumber}`, "true");
-        
         toast.success("Mobile number verified successfully");
         onVerificationSuccess();
       } else {

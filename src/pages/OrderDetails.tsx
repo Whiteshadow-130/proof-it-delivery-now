@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,12 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Camera, Package, ArrowRight } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import OtpVerification from "@/components/verification/OtpVerification";
+import { supabase } from "@/integrations/supabase/client";
 
 const OrderDetails = () => {
   const [orderNumber, setOrderNumber] = useState("");
   const [loading, setLoading] = useState(false);
   const [verified, setVerified] = useState(false);
   const [step, setStep] = useState<"order" | "otp" | "ready">("order");
+  const [orderData, setOrderData] = useState<{
+    id: string;
+    customer_mobile: string;
+  } | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -22,19 +26,49 @@ const OrderDetails = () => {
     const order = params.get("order");
     if (order) {
       setOrderNumber(order);
-      
-      // Check if OTP is already verified for this order
-      const isVerified = localStorage.getItem(`otp_verified_${order}`) === "true";
-      if (isVerified) {
+      fetchOrderDetails(order);
+    }
+  }, [location]);
+
+  const fetchOrderDetails = async (orderNumber: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, order_number, customer_mobile, verified')
+        .eq('order_number', orderNumber)
+        .single();
+
+      if (error) throw error;
+
+      if (!data) {
+        toast({
+          variant: "destructive",
+          title: "Order not found",
+          description: "Could not find a valid order with this number",
+        });
+        setStep("order");
+        return;
+      }
+
+      setOrderData(data);
+
+      // Check if order is already verified
+      if (data.verified) {
         setVerified(true);
         setStep("ready");
       } else {
-        // Check if we have a mobile number for this order
-        const hasMobile = !!localStorage.getItem(`mobile_${order}`);
-        setStep(hasMobile ? "otp" : "order");
+        // Move to OTP step if mobile number exists
+        setStep(data.customer_mobile ? "otp" : "order");
       }
+    } catch (error) {
+      console.error("Error fetching order:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Could not verify order number. Please try again.",
+      });
     }
-  }, [location]);
+  };
 
   const handleVerifyOrder = async () => {
     if (!orderNumber.trim()) {
@@ -49,39 +83,40 @@ const OrderDetails = () => {
     setLoading(true);
 
     try {
-      // Simulate API call to verify order
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      
-      // In a real app, we would validate the order number here
-      // If mobile number is available for this order, move to OTP step
-      const mobile = localStorage.getItem(`mobile_${orderNumber}`);
-      
-      if (mobile) {
-        setStep("otp");
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Order not found",
-          description: "Could not find a valid order with this number",
-        });
-      }
+      await fetchOrderDetails(orderNumber);
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not verify order number. Please try again.",
-      });
+      console.error("Verification error:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOtpVerificationSuccess = () => {
-    setVerified(true);
-    setStep("ready");
+  const handleOtpVerificationSuccess = async () => {
+    if (!orderData) return;
+
+    try {
+      // Update order as verified in the database
+      const { error } = await supabase
+        .from('orders')
+        .update({ verified: true })
+        .eq('id', orderData.id);
+
+      if (error) throw error;
+
+      setVerified(true);
+      setStep("ready");
+    } catch (error) {
+      console.error("Error updating order verification:", error);
+      toast({
+        variant: "destructive",
+        title: "Verification Error",
+        description: "Could not complete verification. Please try again.",
+      });
+    }
   };
 
   const handleStartRecording = () => {
+    if (!orderNumber) return;
     navigate(`/record?order=${orderNumber}`);
   };
 
@@ -134,7 +169,7 @@ const OrderDetails = () => {
             </div>
           )}
 
-          {step === "otp" && (
+          {step === "otp" && orderData && (
             <OtpVerification 
               orderNumber={orderNumber}
               onVerificationSuccess={handleOtpVerificationSuccess}
