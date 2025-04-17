@@ -1,9 +1,11 @@
 
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Order {
   id: string;
@@ -13,46 +15,81 @@ interface Order {
   status: string;
 }
 
-const mockRecentOrders = [
-  {
-    id: "ORD-12345",
-    awb: "AWB123456789",
-    customer: "John Doe",
-    date: "2025-04-15",
-    status: "Video Received",
-  },
-  {
-    id: "ORD-12346",
-    awb: "AWB123456790",
-    customer: "Jane Smith",
-    date: "2025-04-15",
-    status: "QR Generated",
-  },
-  {
-    id: "ORD-12347",
-    awb: "AWB123456791",
-    customer: "Bob Johnson",
-    date: "2025-04-14",
-    status: "Video Received",
-  },
-  {
-    id: "ORD-12348",
-    awb: "AWB123456792",
-    customer: "Alice Brown",
-    date: "2025-04-14",
-    status: "Video Pending",
-  },
-  {
-    id: "ORD-12349",
-    awb: "AWB123456793",
-    customer: "Charlie Wilson",
-    date: "2025-04-13",
-    status: "Video Received",
-  },
-];
-
 const RecentOrders = () => {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  // Fetch recent orders from Supabase
+  useEffect(() => {
+    const fetchRecentOrders = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (error) throw error;
+        
+        // Transform the data to match our Order interface
+        const transformedOrders = data.map(order => ({
+          id: order.order_number,
+          awb: order.awb,
+          customer: order.customer_name,
+          date: new Date(order.created_at).toISOString().split('T')[0],
+          status: order.status
+        }));
+        
+        setOrders(transformedOrders);
+      } catch (error) {
+        console.error("Error fetching recent orders:", error);
+        // Fallback to mock data if there's an error
+        setOrders([
+          {
+            id: "ORD-12345",
+            awb: "AWB123456789",
+            customer: "John Doe",
+            date: "2025-04-15",
+            status: "Video Received",
+          },
+          {
+            id: "ORD-12346",
+            awb: "AWB123456790",
+            customer: "Jane Smith",
+            date: "2025-04-15",
+            status: "QR Generated",
+          },
+          {
+            id: "ORD-12347",
+            awb: "AWB123456791",
+            customer: "Bob Johnson",
+            date: "2025-04-14",
+            status: "Video Received",
+          },
+          {
+            id: "ORD-12348",
+            awb: "AWB123456792",
+            customer: "Alice Brown",
+            date: "2025-04-14",
+            status: "Video Pending",
+          },
+          {
+            id: "ORD-12349",
+            awb: "AWB123456793",
+            customer: "Charlie Wilson",
+            date: "2025-04-13",
+            status: "Video Received",
+          },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchRecentOrders();
+  }, []);
 
   const handleViewAction = (order: Order) => {
     if (order.status === "Video Received") {
@@ -98,37 +135,51 @@ const RecentOrders = () => {
               </tr>
             </thead>
             <tbody>
-              {mockRecentOrders.map((order) => (
-                <tr key={order.id} className="border-b hover:bg-gray-50">
-                  <td className="py-3 px-4">{order.id}</td>
-                  <td className="py-3 px-4">{order.awb}</td>
-                  <td className="py-3 px-4">{order.customer}</td>
-                  <td className="py-3 px-4">{order.date}</td>
-                  <td className="py-3 px-4">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        order.status === "Video Received"
-                          ? "bg-green-100 text-green-800"
-                          : order.status === "QR Generated"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-gray-100 text-gray-800"
-                      }`}
-                    >
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-brand-accent"
-                      onClick={() => handleViewAction(order)}
-                    >
-                      {getButtonText(order.status)}
-                    </Button>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                    Loading recent orders...
                   </td>
                 </tr>
-              ))}
+              ) : orders.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                    No orders found. Create a new order to get started.
+                  </td>
+                </tr>
+              ) : (
+                orders.map((order) => (
+                  <tr key={order.id} className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4">{order.id}</td>
+                    <td className="py-3 px-4">{order.awb}</td>
+                    <td className="py-3 px-4">{order.customer}</td>
+                    <td className="py-3 px-4">{order.date}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          order.status === "Video Received"
+                            ? "bg-green-100 text-green-800"
+                            : order.status === "QR Generated"
+                            ? "bg-blue-100 text-blue-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        {order.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-brand-accent"
+                        onClick={() => handleViewAction(order)}
+                      >
+                        {getButtonText(order.status)}
+                      </Button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

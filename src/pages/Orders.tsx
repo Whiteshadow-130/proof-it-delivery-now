@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,105 +15,75 @@ import {
 } from "@/components/ui/select";
 import NewOrderDialog from "@/components/dashboard/NewOrderDialog";
 import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
-// Mock data for demonstration
-const mockOrders = [
-  {
-    id: "ORD-12345",
-    awb: "AWB123456789",
-    customer: "John Doe",
-    customerMobile: "9876543210",
-    date: "2025-04-15",
-    status: "Video Received",
-    channel: "Amazon",
-  },
-  {
-    id: "ORD-12346",
-    awb: "AWB123456790",
-    customer: "Jane Smith",
-    customerMobile: "9876543211",
-    date: "2025-04-15",
-    status: "QR Generated",
-    channel: "Shopify",
-  },
-  {
-    id: "ORD-12347",
-    awb: "AWB123456791",
-    customer: "Bob Johnson",
-    date: "2025-04-14",
-    status: "Video Received",
-    channel: "Flipkart",
-  },
-  {
-    id: "ORD-12348",
-    awb: "AWB123456792",
-    customer: "Alice Brown",
-    date: "2025-04-14",
-    status: "Video Pending",
-    channel: "Amazon",
-  },
-  {
-    id: "ORD-12349",
-    awb: "AWB123456793",
-    customer: "Charlie Wilson",
-    date: "2025-04-13",
-    status: "Video Received",
-    channel: "Meesho",
-  },
-  {
-    id: "ORD-12350",
-    awb: "AWB123456794",
-    customer: "Eva Green",
-    date: "2025-04-13",
-    status: "QR Generated",
-    channel: "Shopify",
-  },
-  {
-    id: "ORD-12351",
-    awb: "AWB123456795",
-    customer: "Frank Miller",
-    date: "2025-04-12",
-    status: "Video Received",
-    channel: "Amazon",
-  },
-  {
-    id: "ORD-12352",
-    awb: "AWB123456796",
-    customer: "Grace Lee",
-    date: "2025-04-12",
-    status: "Video Pending",
-    channel: "Flipkart",
-  },
-];
+// Order type definition
+interface Order {
+  id: string;
+  awb: string;
+  customer: string;
+  customerMobile?: string;
+  date: string;
+  status: string;
+  channel: string;
+}
 
 const Orders = () => {
-  const [orders, setOrders] = useState(mockOrders);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all-statuses");
   const [channelFilter, setChannelFilter] = useState("all-channels");
   const [isNewOrderDialogOpen, setIsNewOrderDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  // Fetch orders from Supabase
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        // Transform the data to match our Order interface
+        const transformedOrders = data.map(order => ({
+          id: order.order_number,
+          awb: order.awb,
+          customer: order.customer_name,
+          customerMobile: order.customer_mobile,
+          date: new Date(order.created_at).toISOString().split('T')[0],
+          status: order.status,
+          channel: order.channel || 'N/A'
+        }));
+        
+        setOrders(transformedOrders);
+      } catch (error) {
+        console.error("Error fetching orders:", error);
+        toast.error("Failed to load orders. Please refresh the page.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchOrders();
+  }, []);
 
   // Add a new order
   const addNewOrder = (orderData) => {
-    // Create a new order object
-    const newOrder = {
-      id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
+    // Add the new order to the orders array
+    setOrders([{
+      id: orderData.id,
       awb: orderData.awb,
       customer: orderData.customerName,
       customerMobile: orderData.customerMobile,
-      date: new Date().toISOString().split('T')[0],
-      status: "QR Generated",
-      channel: orderData.channel,
-    };
-    
-    // Add the new order to the orders array
-    setOrders([newOrder, ...orders]);
-    
-    // Save mobile number to localStorage for OTP verification
-    localStorage.setItem(`mobile_${newOrder.id}`, orderData.customerMobile);
-    
-    toast.success(`New order ${newOrder.id} created successfully`);
+      date: orderData.date,
+      status: orderData.status,
+      channel: orderData.channel
+    }, ...orders]);
   };
 
   // Handle view actions
@@ -211,7 +181,11 @@ const Orders = () => {
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>All Orders</CardTitle>
           <div className="text-sm text-gray-500">
-            Showing {filteredOrders.length} of {orders.length} orders
+            {loading ? (
+              "Loading orders..."
+            ) : (
+              `Showing ${filteredOrders.length} of ${orders.length} orders`
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -230,44 +204,58 @@ const Orders = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">{order.id}</td>
-                    <td className="py-3 px-4">{order.awb}</td>
-                    <td className="py-3 px-4">{order.customer}</td>
-                    <td className="py-3 px-4">
-                      {order.customerMobile ? 
-                        `XXXXX${order.customerMobile.slice(-5)}` : 
-                        "N/A"}
-                    </td>
-                    <td className="py-3 px-4">{order.date}</td>
-                    <td className="py-3 px-4">{order.channel}</td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          order.status === "Video Received"
-                            ? "bg-green-100 text-green-800"
-                            : order.status === "QR Generated"
-                            ? "bg-blue-100 text-blue-800"
-                            : "bg-gray-100 text-gray-800"
-                        }`}
-                      >
-                        {order.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-brand-accent"
-                        onClick={() => handleViewAction(order)}
-                      >
-                        <Eye className="h-4 w-4 mr-2" />
-                        {order.status === "Video Received" ? "View Video" : "View QR"}
-                      </Button>
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-gray-500">
+                      Loading orders...
                     </td>
                   </tr>
-                ))}
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-gray-500">
+                      No orders found. Create a new order to get started.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOrders.map((order) => (
+                    <tr key={order.id} className="border-b hover:bg-gray-50">
+                      <td className="py-3 px-4">{order.id}</td>
+                      <td className="py-3 px-4">{order.awb}</td>
+                      <td className="py-3 px-4">{order.customer}</td>
+                      <td className="py-3 px-4">
+                        {order.customerMobile ? 
+                          `XXXXX${order.customerMobile.slice(-5)}` : 
+                          "N/A"}
+                      </td>
+                      <td className="py-3 px-4">{order.date}</td>
+                      <td className="py-3 px-4">{order.channel}</td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            order.status === "Video Received"
+                              ? "bg-green-100 text-green-800"
+                              : order.status === "QR Generated"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-gray-100 text-gray-800"
+                          }`}
+                        >
+                          {order.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-brand-accent"
+                          onClick={() => handleViewAction(order)}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          {order.status === "Video Received" ? "View Video" : "View QR"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
