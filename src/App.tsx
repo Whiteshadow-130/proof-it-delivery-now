@@ -17,6 +17,7 @@ import Orders from "./pages/Orders";
 import QrCodes from "./pages/QrCodes";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import VideoProof from "./pages/VideoProof";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +40,7 @@ const App = () => (
           <Route path="/proof" element={<OrderDetails />} />
           <Route path="/record" element={<VideoRecording />} />
           <Route path="/thank-you" element={<ThankYou />} />
+          <Route path="/video-proof" element={<VideoProof />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

@@ -56,17 +56,24 @@ const RecentOrders = () => {
 
   const handleViewAction = (order: Order) => {
     if (order.status === "Video Received") {
-      // Redirect to a video player page (in a real app)
-      // For now, we'll just show a toast
+      // In a real app, navigate to a view video page
+      navigate(`/video-proof?order=${order.id}`);
       toast.success(`Viewing video for order ${order.id}`);
     } else if (order.status === "QR Generated") {
-      // Redirect to the QR code page
+      // Redirect to the specific QR code
       navigate(`/qr-codes?order=${order.id}`);
     } else if (order.status === "Video Pending") {
-      // Open the recording page in a new tab
+      // Open the recording page for this specific order
       const recordUrl = `${window.location.origin}/proof?order=${order.id}`;
       window.open(recordUrl, '_blank');
     }
+  };
+
+  const getButtonText = (status: string) => {
+    if (status === "Video Received") return "View Video";
+    if (status === "QR Generated") return "View QR";
+    if (status === "Video Pending") return "Get Video";
+    return "View";
   };
 
   return (
@@ -117,7 +124,7 @@ const RecentOrders = () => {
                       className="text-brand-accent"
                       onClick={() => handleViewAction(order)}
                     >
-                      {order.status === "Video Received" ? "View Video" : "View QR"}
+                      {getButtonText(order.status)}
                     </Button>
                   </td>
                 </tr>

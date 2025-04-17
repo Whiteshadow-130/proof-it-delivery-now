@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Camera, Video, X, CheckCircle, RotateCcw, Upload } from "lucide-react";
+import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
 const VideoRecording = () => {
@@ -14,6 +14,9 @@ const VideoRecording = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+  const [videoAlreadyUploaded, setVideoAlreadyUploaded] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -29,6 +32,10 @@ const VideoRecording = () => {
   const MAX_RECORDING_TIME = 90; // 90 seconds
 
   useEffect(() => {
+    // Check if video was already uploaded for this order
+    // In a real app, this would fetch from your backend
+    checkVideoUploaded();
+
     return () => {
       // Clean up when component unmounts
       if (timerRef.current) {
@@ -40,13 +47,37 @@ const VideoRecording = () => {
     };
   }, []);
 
+  // Simulate checking if video was already uploaded
+  const checkVideoUploaded = async () => {
+    // In a real app, this would be an API call to check the database
+    // For simulation, we'll use local storage
+    const uploaded = localStorage.getItem(`video_uploaded_${orderNumber}`);
+    if (uploaded === "true") {
+      setVideoAlreadyUploaded(true);
+      toast({
+        title: "Video already submitted",
+        description: "You've already recorded and uploaded a video for this order.",
+      });
+    }
+  };
+
   const requestCameraPermission = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      streamRef.current = stream;
-      setHasPermission(true);
-      setPermissionError(null);
-      return true;
+      // Get list of video devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setCameras(videoDevices);
+      
+      // Default to front camera if available
+      const frontCameraIndex = videoDevices.findIndex(
+        device => device.label.toLowerCase().includes('front')
+      );
+      
+      const initialCameraIndex = frontCameraIndex !== -1 ? frontCameraIndex : 0;
+      setCurrentCameraIndex(initialCameraIndex);
+      
+      // Start stream with selected camera
+      return await startCameraStream(videoDevices[initialCameraIndex]?.deviceId);
     } catch (err) {
       console.error("Error accessing camera:", err);
       setHasPermission(false);
@@ -55,7 +86,70 @@ const VideoRecording = () => {
     }
   };
 
+  const startCameraStream = async (deviceId?: string) => {
+    try {
+      // Stop any existing stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      // Create constraints object
+      const constraints: MediaStreamConstraints = {
+        audio: true,
+        video: deviceId ? { deviceId: { exact: deviceId } } : true
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      
+      // Display camera feed immediately for testing
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(e => console.error("Error playing video:", e));
+      }
+      
+      setHasPermission(true);
+      setPermissionError(null);
+      return true;
+    } catch (err) {
+      console.error("Error starting camera stream:", err);
+      setHasPermission(false);
+      setPermissionError("Camera access failed. Please check your device permissions.");
+      return false;
+    }
+  };
+
+  const switchCamera = async () => {
+    if (cameras.length <= 1) {
+      toast({
+        title: "Camera switching unavailable",
+        description: "No additional cameras detected on your device.",
+      });
+      return;
+    }
+    
+    const nextCameraIndex = (currentCameraIndex + 1) % cameras.length;
+    const success = await startCameraStream(cameras[nextCameraIndex].deviceId);
+    
+    if (success) {
+      setCurrentCameraIndex(nextCameraIndex);
+      toast({
+        title: "Camera switched",
+        description: `Using ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`,
+      });
+    }
+  };
+
   const startCountdown = async () => {
+    if (videoAlreadyUploaded) {
+      toast({
+        title: "Video already submitted",
+        description: "You've already recorded and uploaded a video for this order.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const hasAccess = await requestCameraPermission();
     if (!hasAccess) return;
 
@@ -83,7 +177,7 @@ const VideoRecording = () => {
     
     if (videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play();
+      videoRef.current.play().catch(e => console.error("Error playing video:", e));
     }
     
     const mediaRecorder = new MediaRecorder(streamRef.current);
@@ -104,7 +198,7 @@ const VideoRecording = () => {
       if (videoRef.current) {
         videoRef.current.srcObject = null;
         videoRef.current.src = videoURL;
-        videoRef.current.play();
+        videoRef.current.play().catch(e => console.error("Error playing video:", e));
       }
       
       setStep("preview");
@@ -153,6 +247,10 @@ const VideoRecording = () => {
         const newProgress = prev + Math.random() * 10;
         if (newProgress >= 100) {
           clearInterval(interval);
+          
+          // Mark as uploaded in storage
+          localStorage.setItem(`video_uploaded_${orderNumber}`, "true");
+          setVideoAlreadyUploaded(true);
           
           // In a real app, we would send the video to the server here
           setTimeout(() => {
@@ -216,6 +314,13 @@ const VideoRecording = () => {
                 </ul>
               </div>
 
+              {videoAlreadyUploaded && (
+                <div className="bg-yellow-50 text-amber-700 p-4 rounded-lg text-sm">
+                  <p className="font-medium">You have already uploaded a video for this order</p>
+                  <p>Each order can only have one video submission.</p>
+                </div>
+              )}
+
               {permissionError && (
                 <div className="bg-red-50 text-red-600 p-4 rounded-lg text-sm">
                   <p className="font-medium">Camera permission required</p>
@@ -223,7 +328,11 @@ const VideoRecording = () => {
                 </div>
               )}
 
-              <Button className="w-full" onClick={startCountdown}>
+              <Button 
+                className="w-full" 
+                onClick={startCountdown}
+                disabled={videoAlreadyUploaded}
+              >
                 Start Recording
                 <Video className="ml-2 h-4 w-4" />
               </Button>
@@ -268,7 +377,7 @@ const VideoRecording = () => {
                 </div>
               )}
 
-              <div className="video-container bg-gray-900 rounded-lg overflow-hidden">
+              <div className="video-container bg-gray-900 rounded-lg overflow-hidden relative">
                 <video
                   ref={videoRef}
                   muted={step === "recording"}
@@ -278,8 +387,20 @@ const VideoRecording = () => {
                 
                 {step === "recording" && (
                   <>
-                    <div className="recording-indicator" />
-                    <div className="timer">{formatTime(recordingTime)}</div>
+                    <div className="absolute top-2 right-2 z-10">
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        className="h-8 w-8 p-0 rounded-full"
+                        onClick={switchCamera}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="recording-indicator absolute top-3 left-3 h-3 w-3 bg-red-500 rounded-full animate-pulse"></div>
+                    <div className="timer absolute bottom-3 left-3 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+                      {formatTime(recordingTime)}
+                    </div>
                   </>
                 )}
               </div>

@@ -1,11 +1,11 @@
 
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { QrCode as QrCodeIcon, Plus, Download, Copy, Share2 } from "lucide-react";
+import { QrCode as QrCodeIcon, Plus, Download, Copy, Share2, ArrowLeft } from "lucide-react";
 import { toast } from "@/components/ui/sonner";
 import QRCode from "react-qr-code";
 import NewOrderDialog from "@/components/dashboard/NewOrderDialog";
@@ -82,7 +82,18 @@ const QrCodes = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [qrCodes, setQrCodes] = useState([]);
   const [newOrderDialog, setNewOrderDialog] = useState(false);
+  const [specificOrderId, setSpecificOrderId] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check for specific order in URL
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const orderId = params.get("order");
+    if (orderId) {
+      setSpecificOrderId(orderId);
+    }
+  }, [location.search]);
 
   // Generate QR code URLs and data on component mount
   useEffect(() => {
@@ -99,13 +110,22 @@ const QrCodes = () => {
     setQrCodes(generatedQrCodes);
   }, []);
 
-  // Filter QR codes based on search
+  // Filter QR codes based on search and specific order
   const filteredQrCodes = qrCodes.filter(
-    (qr) =>
-      searchTerm === "" ||
-      qr.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      qr.awb.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      qr.customer.toLowerCase().includes(searchTerm.toLowerCase())
+    (qr) => {
+      // If we're viewing a specific order, only show that one
+      if (specificOrderId && qr.orderId !== specificOrderId) {
+        return false;
+      }
+      
+      // Apply search filter
+      return (
+        searchTerm === "" ||
+        qr.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        qr.awb.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        qr.customer.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
   );
 
   const handleCopyUrl = (url) => {
@@ -161,39 +181,66 @@ const QrCodes = () => {
     img.src = "data:image/svg+xml;base64," + btoa(svgData);
   };
 
+  const clearSpecificOrder = () => {
+    setSpecificOrderId("");
+    navigate("/qr-codes");
+  };
+
   return (
     <DashboardLayout>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">QR Codes</h1>
+        {specificOrderId ? (
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="mr-4"
+              onClick={clearSpecificOrder}
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to all QR codes
+            </Button>
+            <h1 className="text-2xl font-bold">QR Code for {specificOrderId}</h1>
+          </div>
+        ) : (
+          <h1 className="text-2xl font-bold">QR Codes</h1>
+        )}
+        
         <div className="space-x-2">
-          <Button variant="outline" onClick={handleGenerateNewQR}>
-            <Plus className="h-4 w-4 mr-2" /> Generate New QR
-          </Button>
-          <Button>
-            <Download className="h-4 w-4 mr-2" /> Export All
-          </Button>
+          {!specificOrderId && (
+            <>
+              <Button variant="outline" onClick={handleGenerateNewQR}>
+                <Plus className="h-4 w-4 mr-2" /> Generate New QR
+              </Button>
+              <Button>
+                <Download className="h-4 w-4 mr-2" /> Export All
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
-      <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <CardTitle>Search QR Codes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-2">
-            <Input
-              placeholder="Search by order ID, AWB, or customer name"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <Button variant="secondary">Search</Button>
-          </div>
-        </CardContent>
-      </Card>
+      {!specificOrderId && (
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle>Search QR Codes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center space-x-2">
+              <Input
+                placeholder="Search by order ID, AWB, or customer name"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              <Button variant="secondary">Search</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className={specificOrderId ? "" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
         {filteredQrCodes.map((qr) => (
-          <Card key={qr.id} className="overflow-hidden">
+          <Card key={qr.id} className={specificOrderId ? "max-w-md mx-auto" : "overflow-hidden"}>
             <CardHeader className="bg-gray-50 pb-2">
               <CardTitle className="text-lg">{qr.orderId}</CardTitle>
             </CardHeader>
@@ -203,9 +250,9 @@ const QrCodes = () => {
                   <QRCode
                     id={`qr-${qr.orderId}`}
                     value={qr.url}
-                    size={128}
+                    size={specificOrderId ? 192 : 128}
                     level="M"
-                    className="h-24 w-24"
+                    className={specificOrderId ? "h-48 w-48" : "h-24 w-24"}
                   />
                 </div>
               </div>
