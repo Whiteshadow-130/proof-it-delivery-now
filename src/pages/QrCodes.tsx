@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -9,84 +10,27 @@ import { toast } from "@/components/ui/sonner";
 import QRCode from "react-qr-code";
 import NewOrderDialog from "@/components/dashboard/NewOrderDialog";
 import jsPDF from "jspdf";
+import { supabase } from "@/integrations/supabase/client";
 
-const mockOrders = [
-  {
-    id: "ORD-12345",
-    awb: "AWB123456789",
-    customer: "John Doe",
-    customerMobile: "9876543210",
-    date: "2025-04-15",
-    status: "QR Generated",
-    channel: "Amazon",
-  },
-  {
-    id: "ORD-12346",
-    awb: "AWB123456790",
-    customer: "Jane Smith",
-    customerMobile: "9876543211",
-    date: "2025-04-15",
-    status: "QR Generated",
-    channel: "Shopify",
-  },
-  {
-    id: "ORD-12347",
-    awb: "AWB123456791",
-    customer: "Bob Johnson",
-    date: "2025-04-14",
-    status: "QR Generated",
-    channel: "Flipkart",
-  },
-  {
-    id: "ORD-12348",
-    awb: "AWB123456792",
-    customer: "Alice Brown",
-    date: "2025-04-14",
-    status: "QR Generated",
-    channel: "Amazon",
-  },
-  {
-    id: "ORD-12349",
-    awb: "AWB123456793",
-    customer: "Charlie Wilson",
-    date: "2025-04-13",
-    status: "QR Generated",
-    channel: "Meesho",
-  },
-  {
-    id: "ORD-12350",
-    awb: "AWB123456794",
-    customer: "Eva Green",
-    date: "2025-04-13",
-    status: "QR Generated",
-    channel: "Shopify",
-  },
-  {
-    id: "ORD-12351",
-    awb: "AWB123456795",
-    customer: "Frank Miller",
-    date: "2025-04-12",
-    status: "QR Generated",
-    channel: "Amazon",
-  },
-  {
-    id: "ORD-12352",
-    awb: "AWB123456796",
-    customer: "Grace Lee",
-    date: "2025-04-12",
-    status: "QR Generated",
-    channel: "Flipkart",
-  },
-];
+interface QrCode {
+  id: string;
+  orderId: string;
+  awb: string;
+  customer: string;
+  customerMobile: string;
+  date: string;
+  url: string;
+}
 
 const QrCodes = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [qrCodes, setQrCodes] = useState([]);
+  const [qrCodes, setQrCodes] = useState<QrCode[]>([]);
   const [newOrderDialog, setNewOrderDialog] = useState(false);
   const [specificOrderId, setSpecificOrderId] = useState("");
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const qrRefs = useRef({});
+  const qrRefs = useRef<Record<string, SVGSVGElement | null>>({});
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -96,18 +40,40 @@ const QrCodes = () => {
     }
   }, [location.search]);
 
+  // Fetch QR codes from Supabase
   useEffect(() => {
-    const generatedQrCodes = mockOrders.map(order => ({
-      id: `QR-${order.id.split('-')[1]}`,
-      orderId: order.id,
-      awb: order.awb,
-      customer: order.customer,
-      customerMobile: order.customerMobile || "N/A",
-      date: order.date,
-      url: `${window.location.origin}/proof?order=${order.id}`,
-    }));
+    const fetchQrCodes = async () => {
+      try {
+        setLoading(true);
+        
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        
+        // Transform the data to match our QrCode interface
+        const transformedQrCodes = orders.map(order => ({
+          id: `QR-${order.order_number.split('-')[1]}`,
+          orderId: order.order_number,
+          awb: order.awb,
+          customer: order.customer_name,
+          customerMobile: order.customer_mobile || "N/A",
+          date: new Date(order.created_at).toISOString().split('T')[0],
+          url: `${window.location.origin}/proof?order=${order.order_number}`,
+        }));
+        
+        setQrCodes(transformedQrCodes);
+      } catch (error) {
+        console.error("Error fetching QR codes:", error);
+        toast.error("Failed to load QR codes. Please refresh the page.");
+      } finally {
+        setLoading(false);
+      }
+    };
     
-    setQrCodes(generatedQrCodes);
+    fetchQrCodes();
   }, []);
 
   const filteredQrCodes = qrCodes.filter(
@@ -135,23 +101,43 @@ const QrCodes = () => {
   };
 
   const handleNewOrderSubmit = (orderData) => {
-    const newOrderId = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
-    
     const newQrCode = {
-      id: `QR-${newOrderId.split('-')[1]}`,
-      orderId: newOrderId,
+      id: `QR-${orderData.id.split('-')[1]}`,
+      orderId: orderData.id,
       awb: orderData.awb,
       customer: orderData.customerName,
       customerMobile: orderData.customerMobile,
       date: new Date().toISOString().split('T')[0],
-      url: `${window.location.origin}/proof?order=${newOrderId}`,
+      url: `${window.location.origin}/proof?order=${orderData.id}`,
     };
     
-    localStorage.setItem(`mobile_${newOrderId}`, orderData.customerMobile);
-    
+    // Add the new QR code to the state
     setQrCodes([newQrCode, ...qrCodes]);
     
-    toast.success(`QR code generated for order ${newOrderId}`);
+    toast.success(`QR code generated for order ${orderData.id}`);
+  };
+
+  // Function to generate QR code for a specific order in the Orders page
+  const handleGenerateQRForOrder = async (orderId: string) => {
+    try {
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('order_number', orderId)
+        .single();
+      
+      if (error) throw error;
+      
+      if (order) {
+        // Navigate to QR codes page with this specific order
+        navigate(`/qr-codes?order=${order.order_number}`);
+      } else {
+        toast.error("Order not found");
+      }
+    } catch (error) {
+      console.error("Error generating QR for order:", error);
+      toast.error("Failed to generate QR code");
+    }
   };
 
   const downloadQRCodeAsPNG = (orderId) => {
@@ -283,94 +269,117 @@ const QrCodes = () => {
         </Card>
       )}
 
-      <div className={specificOrderId ? "" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
-        {filteredQrCodes.map((qr) => (
-          <Card key={qr.id} className={specificOrderId ? "max-w-md mx-auto" : "overflow-hidden"}>
-            <CardHeader className="bg-gray-50 pb-2">
-              <CardTitle className="text-lg">{qr.orderId}</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <div className="flex justify-center mb-4">
-                <div className="border border-gray-200 p-3 bg-white rounded-lg">
-                  <QRCode
-                    id={`qr-${qr.orderId}`}
-                    value={qr.url}
-                    size={specificOrderId ? 192 : 128}
-                    level="M"
-                    className={specificOrderId ? "h-48 w-48" : "h-24 w-24"}
-                    ref={el => qrRefs.current[qr.orderId] = el}
-                  />
+      {loading ? (
+        <div className="flex justify-center items-center p-12">
+          <p className="text-lg text-gray-500">Loading QR codes...</p>
+        </div>
+      ) : filteredQrCodes.length === 0 ? (
+        <div className="text-center p-12">
+          <QrCodeIcon className="h-16 w-16 mx-auto text-gray-400 mb-4" />
+          <h3 className="text-lg font-medium mb-2">No QR Codes Found</h3>
+          <p className="text-gray-500 mb-6">
+            {specificOrderId 
+              ? `No QR code found for order ${specificOrderId}.` 
+              : "No QR codes match your search criteria."}
+          </p>
+          <Button onClick={handleGenerateNewQR}>
+            <Plus className="h-4 w-4 mr-2" /> Generate New QR Code
+          </Button>
+        </div>
+      ) : (
+        <div className={specificOrderId ? "" : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"}>
+          {filteredQrCodes.map((qr) => (
+            <Card key={qr.id} className={specificOrderId ? "max-w-md mx-auto" : "overflow-hidden"}>
+              <CardHeader className="bg-gray-50 pb-2">
+                <CardTitle className="text-lg">{qr.orderId}</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4">
+                <div className="flex justify-center mb-4">
+                  <div className="border border-gray-200 p-3 bg-white rounded-lg">
+                    <QRCode
+                      id={`qr-${qr.orderId}`}
+                      value={qr.url}
+                      size={specificOrderId ? 192 : 128}
+                      level="M"
+                      className={specificOrderId ? "h-48 w-48" : "h-24 w-24"}
+                      ref={el => {
+                        if (el) {
+                          qrRefs.current[qr.orderId] = el;
+                        }
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
-              
-              <div className="space-y-2 mb-4">
-                <div className="grid grid-cols-3">
-                  <span className="text-sm text-gray-500">AWB:</span>
-                  <span className="text-sm font-medium col-span-2">{qr.awb}</span>
+                
+                <div className="space-y-2 mb-4">
+                  <div className="grid grid-cols-3">
+                    <span className="text-sm text-gray-500">AWB:</span>
+                    <span className="text-sm font-medium col-span-2">{qr.awb}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-sm text-gray-500">Customer:</span>
+                    <span className="text-sm font-medium col-span-2">{qr.customer}</span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-sm text-gray-500">Mobile:</span>
+                    <span className="text-sm font-medium col-span-2">
+                      {qr.customerMobile && qr.customerMobile !== "N/A" ? 
+                        `XXXXX${qr.customerMobile.slice(-5)}` : 
+                        "N/A"}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3">
+                    <span className="text-sm text-gray-500">Created:</span>
+                    <span className="text-sm font-medium col-span-2">{qr.date}</span>
+                  </div>
+                  <div className="pt-2">
+                    <Input 
+                      value={qr.url} 
+                      readOnly 
+                      className="text-xs bg-gray-50"
+                    />
+                  </div>
                 </div>
-                <div className="grid grid-cols-3">
-                  <span className="text-sm text-gray-500">Customer:</span>
-                  <span className="text-sm font-medium col-span-2">{qr.customer}</span>
-                </div>
-                <div className="grid grid-cols-3">
-                  <span className="text-sm text-gray-500">Mobile:</span>
-                  <span className="text-sm font-medium col-span-2">
-                    {qr.customerMobile && qr.customerMobile !== "N/A" ? 
-                      `XXXXX${qr.customerMobile.slice(-5)}` : 
-                      "N/A"}
-                  </span>
-                </div>
-                <div className="grid grid-cols-3">
-                  <span className="text-sm text-gray-500">Created:</span>
-                  <span className="text-sm font-medium col-span-2">{qr.date}</span>
-                </div>
-                <div className="pt-2">
-                  <Input 
-                    value={qr.url} 
-                    readOnly 
-                    className="text-xs bg-gray-50"
-                  />
-                </div>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-xs"
-                  onClick={() => handleCopyUrl(qr.url)}
-                >
-                  <Copy className="h-3 w-3 mr-1" /> Copy URL
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-xs"
-                  onClick={() => downloadQRCodeAsPNG(qr.orderId)}
-                >
-                  <Download className="h-3 w-3 mr-1" /> PNG
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-xs"
-                  onClick={() => downloadQRCodeAsPDF(qr)}
-                >
-                  <FileText className="h-3 w-3 mr-1" /> PDF
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-xs"
-                  onClick={() => handleCopyUrl(qr.url)}
-                >
-                  <Share2 className="h-3 w-3 mr-1" /> Share
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs"
+                    onClick={() => handleCopyUrl(qr.url)}
+                  >
+                    <Copy className="h-3 w-3 mr-1" /> Copy URL
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs"
+                    onClick={() => downloadQRCodeAsPNG(qr.orderId)}
+                  >
+                    <Download className="h-3 w-3 mr-1" /> PNG
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs"
+                    onClick={() => downloadQRCodeAsPDF(qr)}
+                  >
+                    <FileText className="h-3 w-3 mr-1" /> PDF
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs"
+                    onClick={() => handleCopyUrl(qr.url)}
+                  >
+                    <Share2 className="h-3 w-3 mr-1" /> Share
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       <NewOrderDialog
         open={newOrderDialog}

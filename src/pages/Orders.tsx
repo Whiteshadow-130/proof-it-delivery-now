@@ -1,11 +1,10 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Package, Download, Search, Eye, Plus } from "lucide-react";
+import { Package, Download, Search, Eye, Plus, QrCode } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -100,6 +99,12 @@ const Orders = () => {
       const recordUrl = `${window.location.origin}/proof?order=${order.id}`;
       window.open(recordUrl, '_blank');
     }
+  };
+
+  // Handle generating a QR code for a specific order
+  const handleGenerateQRCode = (order) => {
+    navigate(`/qr-codes?order=${order.id}`);
+    toast.success(`Viewing QR code for order ${order.id}`);
   };
 
   // Filter orders based on search and filters
@@ -243,15 +248,25 @@ const Orders = () => {
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-brand-accent"
-                          onClick={() => handleViewAction(order)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          {order.status === "Video Received" ? "View Video" : "View QR"}
-                        </Button>
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-brand-accent"
+                            onClick={() => handleViewAction(order)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            {order.status === "Video Received" ? "View Video" : "View QR"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleGenerateQRCode(order)}
+                          >
+                            <QrCode className="h-4 w-4 mr-2" />
+                            QR Code
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
