@@ -22,6 +22,7 @@ const mockOrders = [
     id: "ORD-12345",
     awb: "AWB123456789",
     customer: "John Doe",
+    customerMobile: "9876543210",
     date: "2025-04-15",
     status: "Video Received",
     channel: "Amazon",
@@ -30,6 +31,7 @@ const mockOrders = [
     id: "ORD-12346",
     awb: "AWB123456790",
     customer: "Jane Smith",
+    customerMobile: "9876543211",
     date: "2025-04-15",
     status: "QR Generated",
     channel: "Shopify",
@@ -99,6 +101,7 @@ const Orders = () => {
       id: `ORD-${Math.floor(10000 + Math.random() * 90000)}`,
       awb: orderData.awb,
       customer: orderData.customerName,
+      customerMobile: orderData.customerMobile,
       date: new Date().toISOString().split('T')[0],
       status: "QR Generated",
       channel: orderData.channel,
@@ -106,6 +109,10 @@ const Orders = () => {
     
     // Add the new order to the orders array
     setOrders([newOrder, ...orders]);
+    
+    // Save mobile number to localStorage for OTP verification
+    localStorage.setItem(`mobile_${newOrder.id}`, orderData.customerMobile);
+    
     toast.success(`New order ${newOrder.id} created successfully`);
   };
 
@@ -215,6 +222,7 @@ const Orders = () => {
                   <th className="text-left py-3 px-4 font-medium">Order ID</th>
                   <th className="text-left py-3 px-4 font-medium">AWB</th>
                   <th className="text-left py-3 px-4 font-medium">Customer</th>
+                  <th className="text-left py-3 px-4 font-medium">Mobile</th>
                   <th className="text-left py-3 px-4 font-medium">Date</th>
                   <th className="text-left py-3 px-4 font-medium">Channel</th>
                   <th className="text-left py-3 px-4 font-medium">Status</th>
@@ -227,6 +235,11 @@ const Orders = () => {
                     <td className="py-3 px-4">{order.id}</td>
                     <td className="py-3 px-4">{order.awb}</td>
                     <td className="py-3 px-4">{order.customer}</td>
+                    <td className="py-3 px-4">
+                      {order.customerMobile ? 
+                        `XXXXX${order.customerMobile.slice(-5)}` : 
+                        "N/A"}
+                    </td>
                     <td className="py-3 px-4">{order.date}</td>
                     <td className="py-3 px-4">{order.channel}</td>
                     <td className="py-3 px-4">

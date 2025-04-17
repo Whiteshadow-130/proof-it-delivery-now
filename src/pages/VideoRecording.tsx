@@ -17,6 +17,7 @@ const VideoRecording = () => {
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
   const [videoAlreadyUploaded, setVideoAlreadyUploaded] = useState(false);
+  const [verified, setVerified] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -33,8 +34,10 @@ const VideoRecording = () => {
 
   useEffect(() => {
     // Check if video was already uploaded for this order
-    // In a real app, this would fetch from your backend
     checkVideoUploaded();
+    
+    // Check if OTP is verified for this order
+    checkOtpVerified();
 
     return () => {
       // Clean up when component unmounts
@@ -47,10 +50,26 @@ const VideoRecording = () => {
     };
   }, []);
 
+  // Check if OTP has been verified
+  const checkOtpVerified = () => {
+    const isVerified = localStorage.getItem(`otp_verified_${orderNumber}`) === "true";
+    setVerified(isVerified);
+    
+    if (!isVerified) {
+      toast({
+        title: "Verification required",
+        description: "Please verify your mobile number before recording a video.",
+        variant: "destructive",
+      });
+      
+      // Redirect to verification page
+      navigate(`/proof?order=${orderNumber}`);
+    }
+  };
+
   // Simulate checking if video was already uploaded
   const checkVideoUploaded = async () => {
     // In a real app, this would be an API call to check the database
-    // For simulation, we'll use local storage
     const uploaded = localStorage.getItem(`video_uploaded_${orderNumber}`);
     if (uploaded === "true") {
       setVideoAlreadyUploaded(true);
@@ -68,12 +87,13 @@ const VideoRecording = () => {
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       setCameras(videoDevices);
       
-      // Default to front camera if available
-      const frontCameraIndex = videoDevices.findIndex(
-        device => device.label.toLowerCase().includes('front')
+      // Default to back camera if available (on mobile)
+      const backCameraIndex = videoDevices.findIndex(
+        device => device.label.toLowerCase().includes('back') || 
+                  device.label.toLowerCase().includes('rear')
       );
       
-      const initialCameraIndex = frontCameraIndex !== -1 ? frontCameraIndex : 0;
+      const initialCameraIndex = backCameraIndex !== -1 ? backCameraIndex : 0;
       setCurrentCameraIndex(initialCameraIndex);
       
       // Start stream with selected camera
@@ -93,19 +113,26 @@ const VideoRecording = () => {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       
-      // Create constraints object
+      // Create constraints object - force specific facing mode for mobile devices
       const constraints: MediaStreamConstraints = {
         audio: true,
-        video: deviceId ? { deviceId: { exact: deviceId } } : true
+        video: deviceId ? 
+          { deviceId: { exact: deviceId } } : 
+          { facingMode: { exact: "environment" } }  // Default to back camera
       };
+      
+      console.log("Using camera constraints:", constraints);
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       
-      // Display camera feed immediately for testing
+      // Display camera feed immediately
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(e => console.error("Error playing video:", e));
+        await videoRef.current.play().catch(e => {
+          console.error("Error playing video:", e);
+          throw e;
+        });
       }
       
       setHasPermission(true);
@@ -113,6 +140,32 @@ const VideoRecording = () => {
       return true;
     } catch (err) {
       console.error("Error starting camera stream:", err);
+      
+      // If exact facing mode fails, try without the "exact" constraint
+      if (String(err).includes("facingMode")) {
+        try {
+          console.log("Trying without exact facingMode constraint");
+          const simpleConstraints: MediaStreamConstraints = {
+            audio: true,
+            video: true
+          };
+          
+          const stream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
+          streamRef.current = stream;
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            await videoRef.current.play();
+          }
+          
+          setHasPermission(true);
+          setPermissionError(null);
+          return true;
+        } catch (fallbackErr) {
+          console.error("Fallback camera access also failed:", fallbackErr);
+        }
+      }
+      
       setHasPermission(false);
       setPermissionError("Camera access failed. Please check your device permissions.");
       return false;
@@ -129,18 +182,44 @@ const VideoRecording = () => {
     }
     
     const nextCameraIndex = (currentCameraIndex + 1) % cameras.length;
-    const success = await startCameraStream(cameras[nextCameraIndex].deviceId);
     
-    if (success) {
-      setCurrentCameraIndex(nextCameraIndex);
+    try {
+      // Stop current stream before switching
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      // Start new stream with next camera
+      const success = await startCameraStream(cameras[nextCameraIndex].deviceId);
+      
+      if (success) {
+        setCurrentCameraIndex(nextCameraIndex);
+        toast({
+          title: "Camera switched",
+          description: `Using ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`,
+        });
+      }
+    } catch (error) {
+      console.error("Error switching camera:", error);
       toast({
-        title: "Camera switched",
-        description: `Using ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`,
+        title: "Camera switch failed",
+        description: "Could not switch to the next camera",
+        variant: "destructive"
       });
     }
   };
 
   const startCountdown = async () => {
+    if (!verified) {
+      toast({
+        title: "Verification required",
+        description: "Please verify your mobile number before recording a video.",
+        variant: "destructive",
+      });
+      navigate(`/proof?order=${orderNumber}`);
+      return;
+    }
+    
     if (videoAlreadyUploaded) {
       toast({
         title: "Video already submitted",
@@ -175,46 +254,59 @@ const VideoRecording = () => {
     setStep("recording");
     setRecordingTime(0);
     
+    // Ensure video element is showing the stream
     if (videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
       videoRef.current.play().catch(e => console.error("Error playing video:", e));
     }
     
-    const mediaRecorder = new MediaRecorder(streamRef.current);
-    mediaRecorderRef.current = mediaRecorder;
-    chunksRef.current = [];
-    
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        chunksRef.current.push(e.data);
-      }
-    };
-    
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-      const videoURL = URL.createObjectURL(blob);
-      setRecordedVideo(videoURL);
+    // Create media recorder with appropriate settings
+    const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+    try {
+      const mediaRecorder = new MediaRecorder(streamRef.current, options);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-        videoRef.current.src = videoURL;
-        videoRef.current.play().catch(e => console.error("Error playing video:", e));
-      }
-      
-      setStep("preview");
-    };
-    
-    mediaRecorder.start();
-    
-    timerRef.current = setInterval(() => {
-      setRecordingTime(prev => {
-        if (prev >= MAX_RECORDING_TIME - 1) {
-          stopRecording();
-          return MAX_RECORDING_TIME;
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
         }
-        return prev + 1;
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const videoURL = URL.createObjectURL(blob);
+        setRecordedVideo(videoURL);
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+          videoRef.current.src = videoURL;
+          videoRef.current.play().catch(e => console.error("Error playing video:", e));
+        }
+        
+        setStep("preview");
+      };
+      
+      mediaRecorder.start();
+      console.log("Recording started with mediaRecorder state:", mediaRecorder.state);
+      
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          if (prev >= MAX_RECORDING_TIME - 1) {
+            stopRecording();
+            return MAX_RECORDING_TIME;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (error) {
+      console.error("Error starting media recorder:", error);
+      toast({
+        title: "Recording error",
+        description: "Could not start recording. Please try again.",
+        variant: "destructive"
       });
-    }, 1000);
+    }
   };
 
   const stopRecording = () => {
@@ -224,6 +316,7 @@ const VideoRecording = () => {
     
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
+      console.log("Recording stopped");
     }
   };
 
@@ -382,7 +475,9 @@ const VideoRecording = () => {
                   ref={videoRef}
                   muted={step === "recording"}
                   playsInline
+                  autoPlay={step === "recording"}
                   className="w-full h-full"
+                  style={{ transform: "scaleX(1)" }} /* Fix for mirrored video */
                 />
                 
                 {step === "recording" && (

@@ -1,129 +1,133 @@
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/use-toast";
-
-interface NewOrderData {
-  orderId: string;
-  awb: string;
-  customerName: string;
-  channel: string;
-}
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface NewOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (orderData: NewOrderData) => void;
+  onSubmit: (orderData: {
+    awb: string;
+    customerName: string;
+    customerMobile: string;
+    channel: string;
+  }) => void;
 }
 
 const NewOrderDialog = ({ open, onOpenChange, onSubmit }: NewOrderDialogProps) => {
-  const [newOrderData, setNewOrderData] = useState<NewOrderData>({
-    orderId: "",
-    awb: "",
-    customerName: "",
-    channel: "",
-  });
-  const { toast } = useToast();
+  const [awb, setAwb] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerMobile, setCustomerMobile] = useState("");
+  const [channel, setChannel] = useState("Amazon");
 
-  const handleNewOrderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setNewOrderData({
-      ...newOrderData,
-      [name]: value,
-    });
-  };
-
-  const handleNewOrderSubmit = () => {
-    // Basic validation
-    if (!newOrderData.awb || !newOrderData.customerName || !newOrderData.channel) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill all required fields.",
-        variant: "destructive",
-      });
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate mobile number (10 digits)
+    if (customerMobile.length !== 10 || !/^\d+$/.test(customerMobile)) {
+      alert("Please enter a valid 10-digit mobile number");
       return;
     }
-
-    // Submit the order
-    onSubmit(newOrderData);
     
-    // Close the dialog and reset form
-    onOpenChange(false);
-    setNewOrderData({
-      orderId: "",
-      awb: "",
-      customerName: "",
-      channel: "",
+    onSubmit({
+      awb,
+      customerName,
+      customerMobile,
+      channel,
     });
+    
+    // Reset form
+    setAwb("");
+    setCustomerName("");
+    setCustomerMobile("");
+    setChannel("Amazon");
+    
+    // Close dialog
+    onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create New Order</DialogTitle>
           <DialogDescription>
-            Enter the order details to generate a QR code for delivery verification.
+            Enter order details to generate a QR code for delivery verification.
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="awb" className="text-right">
-              AWB Number*
-            </Label>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="awb">AWB Number</Label>
             <Input
               id="awb"
-              name="awb"
-              className="col-span-3"
-              value={newOrderData.awb}
-              onChange={handleNewOrderChange}
+              value={awb}
+              onChange={(e) => setAwb(e.target.value)}
+              placeholder="Enter AWB number"
               required
             />
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="customerName" className="text-right">
-              Customer*
-            </Label>
+          
+          <div className="space-y-2">
+            <Label htmlFor="customerName">Customer Name</Label>
             <Input
               id="customerName"
-              name="customerName"
-              className="col-span-3"
-              value={newOrderData.customerName}
-              onChange={handleNewOrderChange}
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Enter customer name"
               required
             />
           </div>
-          <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="channel" className="text-right">
-              Channel*
-            </Label>
+          
+          <div className="space-y-2">
+            <Label htmlFor="customerMobile">Customer Mobile Number</Label>
             <Input
-              id="channel"
-              name="channel"
-              placeholder="Amazon, Shopify, etc."
-              className="col-span-3"
-              value={newOrderData.channel}
-              onChange={handleNewOrderChange}
+              id="customerMobile"
+              value={customerMobile}
+              onChange={(e) => setCustomerMobile(e.target.value)}
+              placeholder="10-digit mobile number"
               required
+              pattern="[0-9]{10}"
+              maxLength={10}
             />
+            <p className="text-xs text-gray-500">Required for OTP verification</p>
           </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleNewOrderSubmit}>Generate QR Code</Button>
-        </DialogFooter>
+          
+          <div className="space-y-2">
+            <Label htmlFor="channel">Sales Channel</Label>
+            <Select value={channel} onValueChange={setChannel} required>
+              <SelectTrigger id="channel">
+                <SelectValue placeholder="Select sales channel" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Amazon">Amazon</SelectItem>
+                <SelectItem value="Shopify">Shopify</SelectItem>
+                <SelectItem value="Flipkart">Flipkart</SelectItem>
+                <SelectItem value="Meesho">Meesho</SelectItem>
+                <SelectItem value="Other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
+          <div className="flex justify-end pt-4">
+            <Button type="submit" className="w-full">Create Order</Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );
