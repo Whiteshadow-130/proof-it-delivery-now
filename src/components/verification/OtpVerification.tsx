@@ -23,6 +23,9 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
   const [verifying, setVerifying] = useState(false);
   const [customerMobile, setCustomerMobile] = useState<string | null>(null);
   
+  // Fixed OTP for demo purposes
+  const DEMO_OTP = "123456";
+  
   // Fetch customer mobile from orders table
   useEffect(() => {
     const fetchCustomerMobile = async () => {
@@ -62,12 +65,9 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
     setLoading(true);
     
     try {
-      // In development, use a fixed OTP
-      const otp = "123456";
-      
-      // Save OTP in localStorage for verification
-      localStorage.setItem(`otp_${orderNumber}`, otp);
-      console.log("Generated OTP:", otp); // For demo purposes only
+      // Store the fixed OTP (123456) for verification
+      localStorage.setItem(`otp_${orderNumber}`, DEMO_OTP);
+      console.log("Generated OTP:", DEMO_OTP); // For demo purposes only
       
       setOtpSent(true);
       setCountdown(30);
@@ -89,16 +89,23 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
     setVerifying(true);
     
     try {
-      // In development, use a fixed OTP verification
-      const savedOtp = localStorage.getItem(`otp_${orderNumber}`);
-      
-      if (savedOtp && savedOtp === otpValue) {
+      // In development, verify against the fixed OTP (123456)
+      if (otpValue === DEMO_OTP) {
+        // Update verification status in the database
+        const { error } = await supabase
+          .from('orders')
+          .update({ verified: true })
+          .eq('order_number', orderNumber);
+          
+        if (error) throw error;
+        
         toast.success("Mobile number verified successfully");
         onVerificationSuccess();
       } else {
         toast.error("Invalid OTP. Please try again.");
       }
     } catch (error) {
+      console.error("Verification error:", error);
       toast.error("Verification failed. Please try again.");
     } finally {
       setVerifying(false);

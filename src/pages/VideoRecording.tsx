@@ -1,10 +1,10 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "@/components/ui/sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const VideoRecording = () => {
   const [step, setStep] = useState<"instructions" | "countdown" | "recording" | "preview" | "uploading">("instructions");
@@ -18,6 +18,7 @@ const VideoRecording = () => {
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
   const [videoAlreadyUploaded, setVideoAlreadyUploaded] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [orderData, setOrderData] = useState<any>(null);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -27,7 +28,6 @@ const VideoRecording = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
   
   const orderNumber = new URLSearchParams(location.search).get("order") || "Unknown";
   const MAX_RECORDING_TIME = 90; // 90 seconds
@@ -36,8 +36,8 @@ const VideoRecording = () => {
     // Check if video was already uploaded for this order
     checkVideoUploaded();
     
-    // Check if OTP is verified for this order
-    checkOtpVerified();
+    // Fetch order and check verification status
+    fetchOrderDetails();
 
     return () => {
       // Clean up when component unmounts
@@ -48,35 +48,55 @@ const VideoRecording = () => {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [orderNumber]);
 
-  // Check if OTP has been verified
-  const checkOtpVerified = () => {
-    const isVerified = localStorage.getItem(`otp_verified_${orderNumber}`) === "true";
-    setVerified(isVerified);
-    
-    if (!isVerified) {
-      toast({
-        title: "Verification required",
-        description: "Please verify your mobile number before recording a video.",
-        variant: "destructive",
-      });
+  // Fetch order details and check verification status
+  const fetchOrderDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('order_number', orderNumber)
+        .single();
+
+      if (error) {
+        console.error("Error fetching order:", error);
+        toast.error("Could not find order details");
+        return;
+      }
+
+      setOrderData(data);
       
-      // Redirect to verification page
-      navigate(`/proof?order=${orderNumber}`);
+      // Check if order is already verified
+      if (data.verified) {
+        setVerified(true);
+      } else {
+        // Redirect to verification page if not verified
+        toast.error("Verification required. Please verify your mobile number before recording a video.");
+        navigate(`/proof?order=${orderNumber}`);
+      }
+    } catch (error) {
+      console.error("Error in fetchOrderDetails:", error);
     }
   };
 
   // Simulate checking if video was already uploaded
   const checkVideoUploaded = async () => {
-    // In a real app, this would be an API call to check the database
-    const uploaded = localStorage.getItem(`video_uploaded_${orderNumber}`);
-    if (uploaded === "true") {
-      setVideoAlreadyUploaded(true);
-      toast({
-        title: "Video already submitted",
-        description: "You've already recorded and uploaded a video for this order.",
-      });
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('video_uploaded')
+        .eq('order_number', orderNumber)
+        .single();
+
+      if (error) throw error;
+
+      if (data?.video_uploaded) {
+        setVideoAlreadyUploaded(true);
+        toast.info("You've already recorded and uploaded a video for this order.");
+      }
+    } catch (err) {
+      console.error("Error checking video upload status:", err);
     }
   };
 
@@ -211,21 +231,13 @@ const VideoRecording = () => {
 
   const startCountdown = async () => {
     if (!verified) {
-      toast({
-        title: "Verification required",
-        description: "Please verify your mobile number before recording a video.",
-        variant: "destructive",
-      });
+      toast.error("Verification required. Please verify your mobile number before recording a video.");
       navigate(`/proof?order=${orderNumber}`);
       return;
     }
     
     if (videoAlreadyUploaded) {
-      toast({
-        title: "Video already submitted",
-        description: "You've already recorded and uploaded a video for this order.",
-        variant: "destructive",
-      });
+      toast.error("You've already recorded and uploaded a video for this order.");
       return;
     }
     
@@ -330,22 +342,20 @@ const VideoRecording = () => {
     setRecordingTime(0);
   };
 
-  const uploadVideo = () => {
+  const uploadVideo = async () => {
     setStep("uploading");
     setUploadProgress(0);
     
     // Simulate upload progress
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       setUploadProgress(prev => {
         const newProgress = prev + Math.random() * 10;
         if (newProgress >= 100) {
           clearInterval(interval);
           
-          // Mark as uploaded in storage
-          localStorage.setItem(`video_uploaded_${orderNumber}`, "true");
-          setVideoAlreadyUploaded(true);
+          // Update video status in Supabase
+          updateVideoStatus();
           
-          // In a real app, we would send the video to the server here
           setTimeout(() => {
             navigate(`/thank-you?order=${orderNumber}`);
           }, 500);
@@ -355,6 +365,26 @@ const VideoRecording = () => {
         return newProgress;
       });
     }, 300);
+  };
+
+  // Update video status in database
+  const updateVideoStatus = async () => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          video_uploaded: true,
+          status: 'Video Received' 
+        })
+        .eq('order_number', orderNumber);
+
+      if (error) throw error;
+      
+      setVideoAlreadyUploaded(true);
+    } catch (err) {
+      console.error("Error updating video status:", err);
+      toast.error("Failed to update video status");
+    }
   };
 
   const formatTime = (seconds: number) => {

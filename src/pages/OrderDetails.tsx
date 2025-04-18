@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, Package, ArrowRight } from "lucide-react";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "@/components/ui/sonner";
 import OtpVerification from "@/components/verification/OtpVerification";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -15,10 +16,10 @@ const OrderDetails = () => {
   const [orderData, setOrderData] = useState<{
     id: string;
     customer_mobile: string;
+    verified: boolean;
   } | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
 
   useEffect(() => {
     // Check for order number in the URL (from QR code)
@@ -41,11 +42,7 @@ const OrderDetails = () => {
       if (error) throw error;
 
       if (!data) {
-        toast({
-          variant: "destructive",
-          title: "Order not found",
-          description: "Could not find a valid order with this number",
-        });
+        toast.error("Could not find a valid order with this number");
         setStep("order");
         return;
       }
@@ -62,21 +59,13 @@ const OrderDetails = () => {
       }
     } catch (error) {
       console.error("Error fetching order:", error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Could not verify order number. Please try again.",
-      });
+      toast.error("Could not verify order number. Please try again.");
     }
   };
 
   const handleVerifyOrder = async () => {
     if (!orderNumber.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Order number required",
-        description: "Please enter the order number to continue",
-      });
+      toast.error("Please enter the order number to continue");
       return;
     }
 
@@ -107,11 +96,7 @@ const OrderDetails = () => {
       setStep("ready");
     } catch (error) {
       console.error("Error updating order verification:", error);
-      toast({
-        variant: "destructive",
-        title: "Verification Error",
-        description: "Could not complete verification. Please try again.",
-      });
+      toast.error("Could not complete verification. Please try again.");
     }
   };
 
