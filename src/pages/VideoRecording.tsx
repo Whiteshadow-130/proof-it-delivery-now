@@ -50,7 +50,6 @@ const VideoRecording = () => {
     };
   }, [orderNumber]);
 
-  // Fetch order details and check verification status
   const fetchOrderDetails = async () => {
     try {
       const { data, error } = await supabase
@@ -61,7 +60,7 @@ const VideoRecording = () => {
 
       if (error) {
         console.error("Error fetching order:", error);
-        toast.error("Could not find order details");
+        toast("Could not find order details");
         return;
       }
 
@@ -72,7 +71,7 @@ const VideoRecording = () => {
         setVerified(true);
       } else {
         // Redirect to verification page if not verified
-        toast.error("Verification required. Please verify your mobile number before recording a video.");
+        toast("Verification required. Please verify your mobile number before recording a video.");
         navigate(`/proof?order=${orderNumber}`);
       }
     } catch (error) {
@@ -80,7 +79,6 @@ const VideoRecording = () => {
     }
   };
 
-  // Simulate checking if video was already uploaded
   const checkVideoUploaded = async () => {
     try {
       const { data, error } = await supabase
@@ -231,13 +229,13 @@ const VideoRecording = () => {
 
   const startCountdown = async () => {
     if (!verified) {
-      toast.error("Verification required. Please verify your mobile number before recording a video.");
+      toast("Verification required. Please verify your mobile number before recording a video.");
       navigate(`/proof?order=${orderNumber}`);
       return;
     }
     
     if (videoAlreadyUploaded) {
-      toast.error("You've already recorded and uploaded a video for this order.");
+      toast("You've already recorded and uploaded a video for this order.");
       return;
     }
     
@@ -367,7 +365,6 @@ const VideoRecording = () => {
     }, 300);
   };
 
-  // Update video status in database
   const updateVideoStatus = async () => {
     try {
       const { error } = await supabase
