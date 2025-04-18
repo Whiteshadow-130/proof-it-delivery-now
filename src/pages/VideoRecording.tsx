@@ -1,14 +1,14 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw, QrCode } from "lucide-react";
+import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import OtpVerification from "@/components/verification/OtpVerification";
 
 const VideoRecording = () => {
-  const [step, setStep] = useState<"instructions" | "countdown" | "recording" | "preview" | "uploading">("instructions");
+  const [step, setStep] = useState<"verification" | "instructions" | "countdown" | "recording" | "preview" | "uploading">("verification");
   const [countdown, setCountdown] = useState(3);
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
@@ -66,9 +66,11 @@ const VideoRecording = () => {
       
       if (data.verified) {
         setVerified(true);
+        setStep("instructions");
       } else {
-        toast.error("Verification required. Please verify your mobile number before recording a video.");
-        navigate(`/proof?order=${orderNumber}`);
+        // Keep in verification step until verified
+        setStep("verification");
+        toast.info("Please verify your mobile number before recording");
       }
     } catch (error) {
       console.error("Error in fetchOrderDetails:", error);
@@ -93,6 +95,12 @@ const VideoRecording = () => {
     } catch (err) {
       console.error("Error checking video upload status:", err);
     }
+  };
+
+  const handleVerificationSuccess = () => {
+    setVerified(true);
+    setStep("instructions");
+    toast.success("Verification successful. You can now record your video.");
   };
 
   const requestCameraPermission = async () => {
@@ -131,7 +139,7 @@ const VideoRecording = () => {
         audio: true,
         video: deviceId ? 
           { deviceId: { exact: deviceId } } : 
-          { facingMode: "environment" }  // Changed from exact to prefer environment
+          { facingMode: "environment" }
       };
       
       console.log("Using camera constraints:", constraints);
@@ -196,7 +204,7 @@ const VideoRecording = () => {
 
   const switchCamera = async () => {
     if (cameras.length <= 1) {
-      toast("No additional cameras detected on your device");
+      toast.info("No additional cameras detected on your device");
       return;
     }
     
@@ -211,18 +219,17 @@ const VideoRecording = () => {
       
       if (success) {
         setCurrentCameraIndex(nextCameraIndex);
-        toast(`Switched to ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`);
+        toast.info(`Switched to ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`);
       }
     } catch (error) {
       console.error("Error switching camera:", error);
-      toast("Could not switch to the next camera");
+      toast.error("Could not switch to the next camera");
     }
   };
 
   const startCountdown = async () => {
     if (!verified) {
       toast.error("Verification required. Please verify your mobile number before recording a video.");
-      navigate(`/proof?order=${orderNumber}`);
       return;
     }
     
@@ -388,10 +395,6 @@ const VideoRecording = () => {
     }
   };
 
-  const viewQRCode = () => {
-    navigate(`/qr-codes?order=${orderNumber}`);
-  };
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -408,6 +411,13 @@ const VideoRecording = () => {
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-md">
         <div className="bg-white rounded-lg shadow-lg p-6">
+          {step === "verification" && (
+            <OtpVerification 
+              orderNumber={orderNumber} 
+              onVerificationSuccess={handleVerificationSuccess} 
+            />
+          )}
+          
           {step === "instructions" && (
             <div className="space-y-6">
               <div className="text-center mb-4">
@@ -464,15 +474,6 @@ const VideoRecording = () => {
                 >
                   Start Recording
                   <Video className="ml-2 h-4 w-4" />
-                </Button>
-                
-                <Button 
-                  variant="outline"
-                  className="w-full" 
-                  onClick={viewQRCode}
-                >
-                  View QR Code
-                  <QrCode className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
