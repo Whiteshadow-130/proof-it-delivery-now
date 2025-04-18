@@ -33,14 +33,11 @@ const VideoRecording = () => {
   const MAX_RECORDING_TIME = 90; // 90 seconds
 
   useEffect(() => {
-    // Check if video was already uploaded for this order
     checkVideoUploaded();
     
-    // Fetch order and check verification status
     fetchOrderDetails();
 
     return () => {
-      // Clean up when component unmounts
       if (timerRef.current) {
         clearInterval(timerRef.current);
       }
@@ -60,22 +57,21 @@ const VideoRecording = () => {
 
       if (error) {
         console.error("Error fetching order:", error);
-        toast("Could not find order details");
+        toast.error("Could not find order details");
         return;
       }
 
       setOrderData(data);
       
-      // Check if order is already verified
       if (data.verified) {
         setVerified(true);
       } else {
-        // Redirect to verification page if not verified
-        toast("Verification required. Please verify your mobile number before recording a video.");
+        toast.error("Verification required. Please verify your mobile number before recording a video.");
         navigate(`/proof?order=${orderNumber}`);
       }
     } catch (error) {
       console.error("Error in fetchOrderDetails:", error);
+      toast.error("An unexpected error occurred");
     }
   };
 
@@ -100,12 +96,10 @@ const VideoRecording = () => {
 
   const requestCameraPermission = async () => {
     try {
-      // Get list of video devices
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       setCameras(videoDevices);
       
-      // Default to back camera if available (on mobile)
       const backCameraIndex = videoDevices.findIndex(
         device => device.label.toLowerCase().includes('back') || 
                   device.label.toLowerCase().includes('rear')
@@ -114,29 +108,27 @@ const VideoRecording = () => {
       const initialCameraIndex = backCameraIndex !== -1 ? backCameraIndex : 0;
       setCurrentCameraIndex(initialCameraIndex);
       
-      // Start stream with selected camera
       return await startCameraStream(videoDevices[initialCameraIndex]?.deviceId);
     } catch (err) {
       console.error("Error accessing camera:", err);
       setHasPermission(false);
       setPermissionError("Camera access denied. Please allow camera access and try again.");
+      toast.error("Camera permission denied");
       return false;
     }
   };
 
   const startCameraStream = async (deviceId?: string) => {
     try {
-      // Stop any existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       
-      // Create constraints object - force specific facing mode for mobile devices
       const constraints: MediaStreamConstraints = {
         audio: true,
         video: deviceId ? 
           { deviceId: { exact: deviceId } } : 
-          { facingMode: { exact: "environment" } }  // Default to back camera
+          { facingMode: { exact: "environment" } }
       };
       
       console.log("Using camera constraints:", constraints);
@@ -144,7 +136,6 @@ const VideoRecording = () => {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       
-      // Display camera feed immediately
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(e => {
@@ -159,7 +150,6 @@ const VideoRecording = () => {
     } catch (err) {
       console.error("Error starting camera stream:", err);
       
-      // If exact facing mode fails, try without the "exact" constraint
       if (String(err).includes("facingMode")) {
         try {
           console.log("Trying without exact facingMode constraint");
@@ -199,12 +189,10 @@ const VideoRecording = () => {
     const nextCameraIndex = (currentCameraIndex + 1) % cameras.length;
     
     try {
-      // Stop current stream before switching
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       
-      // Start new stream with next camera
       const success = await startCameraStream(cameras[nextCameraIndex].deviceId);
       
       if (success) {
@@ -219,13 +207,13 @@ const VideoRecording = () => {
 
   const startCountdown = async () => {
     if (!verified) {
-      toast("Verification required. Please verify your mobile number before recording a video.");
+      toast.error("Verification required. Please verify your mobile number before recording a video.");
       navigate(`/proof?order=${orderNumber}`);
       return;
     }
     
     if (videoAlreadyUploaded) {
-      toast("You've already recorded and uploaded a video for this order.");
+      toast.error("You've already recorded and uploaded a video for this order.");
       return;
     }
     
@@ -249,18 +237,19 @@ const VideoRecording = () => {
   };
 
   const startRecording = () => {
-    if (!streamRef.current) return;
+    if (!streamRef.current) {
+      toast.error("Could not access camera stream");
+      return;
+    }
     
     setStep("recording");
     setRecordingTime(0);
     
-    // Ensure video element is showing the stream
     if (videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
       videoRef.current.play().catch(e => console.error("Error playing video:", e));
     }
     
-    // Create media recorder with appropriate settings
     const options = { mimeType: 'video/webm;codecs=vp9,opus' };
     try {
       const mediaRecorder = new MediaRecorder(streamRef.current, options);
@@ -334,14 +323,12 @@ const VideoRecording = () => {
     setStep("uploading");
     setUploadProgress(0);
     
-    // Simulate upload progress
     const interval = setInterval(async () => {
       setUploadProgress(prev => {
         const newProgress = prev + Math.random() * 10;
         if (newProgress >= 100) {
           clearInterval(interval);
           
-          // Update video status in Supabase
           updateVideoStatus();
           
           setTimeout(() => {
@@ -370,7 +357,7 @@ const VideoRecording = () => {
       setVideoAlreadyUploaded(true);
     } catch (err) {
       console.error("Error updating video status:", err);
-      toast("Failed to update video status");
+      toast.error("Failed to update video status");
     }
   };
 
@@ -494,7 +481,7 @@ const VideoRecording = () => {
                   playsInline
                   autoPlay={step === "recording"}
                   className="w-full h-full"
-                  style={{ transform: "scaleX(1)" }} /* Fix for mirrored video */
+                  style={{ transform: "scaleX(1)" }}
                 />
                 
                 {step === "recording" && (
