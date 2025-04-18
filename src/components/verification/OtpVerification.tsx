@@ -6,7 +6,7 @@ import {
   InputOTPGroup, 
   InputOTPSlot 
 } from "@/components/ui/input-otp";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { CheckCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -65,8 +65,7 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
     setLoading(true);
     
     try {
-      // Store the fixed OTP (123456) for verification
-      localStorage.setItem(`otp_${orderNumber}`, DEMO_OTP);
+      // In development mode, we're using a fixed OTP (123456)
       console.log("Generated OTP:", DEMO_OTP); // For demo purposes only
       
       setOtpSent(true);

@@ -1,8 +1,9 @@
+
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw } from "lucide-react";
+import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -34,9 +35,9 @@ const VideoRecording = () => {
 
   useEffect(() => {
     checkVideoUploaded();
-    
     fetchOrderDetails();
 
+    // Clean up function
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -120,15 +121,17 @@ const VideoRecording = () => {
 
   const startCameraStream = async (deviceId?: string) => {
     try {
+      // Stop any existing stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
       
+      // Configure constraints with preferred camera
       const constraints: MediaStreamConstraints = {
         audio: true,
         video: deviceId ? 
           { deviceId: { exact: deviceId } } : 
-          { facingMode: { exact: "environment" } }
+          { facingMode: "environment" }  // Changed from exact to prefer environment
       };
       
       console.log("Using camera constraints:", constraints);
@@ -138,10 +141,16 @@ const VideoRecording = () => {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(e => {
-          console.error("Error playing video:", e);
-          throw e;
-        });
+        
+        // Make sure to wait for the video to be loaded before playing
+        videoRef.current.onloadedmetadata = async () => {
+          try {
+            await videoRef.current?.play();
+            console.log("Video playback started successfully");
+          } catch (e) {
+            console.error("Error playing video:", e);
+          }
+        };
       }
       
       setHasPermission(true);
@@ -150,39 +159,44 @@ const VideoRecording = () => {
     } catch (err) {
       console.error("Error starting camera stream:", err);
       
-      if (String(err).includes("facingMode")) {
-        try {
-          console.log("Trying without exact facingMode constraint");
-          const simpleConstraints: MediaStreamConstraints = {
-            audio: true,
-            video: true
+      // Fallback to simple constraints if specific camera selection fails
+      try {
+        console.log("Trying fallback camera access");
+        const simpleConstraints: MediaStreamConstraints = {
+          audio: true,
+          video: true
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
+        streamRef.current = stream;
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = async () => {
+            try {
+              await videoRef.current?.play();
+              console.log("Video playback started with fallback constraints");
+            } catch (e) {
+              console.error("Error playing video with fallback:", e);
+            }
           };
-          
-          const stream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
-          streamRef.current = stream;
-          
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            await videoRef.current.play();
-          }
-          
-          setHasPermission(true);
-          setPermissionError(null);
-          return true;
-        } catch (fallbackErr) {
-          console.error("Fallback camera access also failed:", fallbackErr);
         }
+        
+        setHasPermission(true);
+        setPermissionError(null);
+        return true;
+      } catch (fallbackErr) {
+        console.error("Fallback camera access also failed:", fallbackErr);
+        setHasPermission(false);
+        setPermissionError("Camera access failed. Please check your device permissions.");
+        return false;
       }
-      
-      setHasPermission(false);
-      setPermissionError("Camera access failed. Please check your device permissions.");
-      return false;
     }
   };
 
   const switchCamera = async () => {
     if (cameras.length <= 1) {
-      toast("Camera switching unavailable - No additional cameras detected on your device.");
+      toast("No additional cameras detected on your device");
       return;
     }
     
@@ -197,11 +211,11 @@ const VideoRecording = () => {
       
       if (success) {
         setCurrentCameraIndex(nextCameraIndex);
-        toast(`Camera switched to ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`);
+        toast(`Switched to ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`);
       }
     } catch (error) {
       console.error("Error switching camera:", error);
-      toast("Camera switch failed - Could not switch to the next camera");
+      toast("Could not switch to the next camera");
     }
   };
 
@@ -245,12 +259,29 @@ const VideoRecording = () => {
     setStep("recording");
     setRecordingTime(0);
     
+    // Make sure video element is properly set up
     if (videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
       videoRef.current.play().catch(e => console.error("Error playing video:", e));
     }
     
-    const options = { mimeType: 'video/webm;codecs=vp9,opus' };
+    // Try different MIME types for better compatibility
+    const mimeTypes = [
+      'video/webm;codecs=vp9,opus', 
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4'
+    ];
+    
+    let options = {};
+    for (const mimeType of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        options = { mimeType };
+        console.log(`Using MIME type: ${mimeType}`);
+        break;
+      }
+    }
+    
     try {
       const mediaRecorder = new MediaRecorder(streamRef.current, options);
       mediaRecorderRef.current = mediaRecorder;
@@ -290,11 +321,7 @@ const VideoRecording = () => {
       }, 1000);
     } catch (error) {
       console.error("Error starting media recorder:", error);
-      toast({
-        title: "Recording error",
-        description: "Could not start recording. Please try again.",
-        variant: "destructive"
-      });
+      toast.error("Could not start recording. Please try again.");
     }
   };
 
@@ -361,6 +388,10 @@ const VideoRecording = () => {
     }
   };
 
+  const viewQRCode = () => {
+    navigate(`/qr-codes?order=${orderNumber}`);
+  };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -425,14 +456,25 @@ const VideoRecording = () => {
                 </div>
               )}
 
-              <Button 
-                className="w-full" 
-                onClick={startCountdown}
-                disabled={videoAlreadyUploaded}
-              >
-                Start Recording
-                <Video className="ml-2 h-4 w-4" />
-              </Button>
+              <div className="space-y-3">
+                <Button 
+                  className="w-full" 
+                  onClick={startCountdown}
+                  disabled={videoAlreadyUploaded}
+                >
+                  Start Recording
+                  <Video className="ml-2 h-4 w-4" />
+                </Button>
+                
+                <Button 
+                  variant="outline"
+                  className="w-full" 
+                  onClick={viewQRCode}
+                >
+                  View QR Code
+                  <QrCode className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
 
@@ -474,13 +516,13 @@ const VideoRecording = () => {
                 </div>
               )}
 
-              <div className="video-container bg-gray-900 rounded-lg overflow-hidden relative">
+              <div className="video-container bg-gray-900 rounded-lg overflow-hidden relative aspect-video">
                 <video
                   ref={videoRef}
                   muted={step === "recording"}
                   playsInline
                   autoPlay={step === "recording"}
-                  className="w-full h-full"
+                  className="w-full h-full object-cover"
                   style={{ transform: "scaleX(1)" }}
                 />
                 

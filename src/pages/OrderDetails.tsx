@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, Package, ArrowRight } from "lucide-react";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import OtpVerification from "@/components/verification/OtpVerification";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -17,6 +17,7 @@ const OrderDetails = () => {
     id: string;
     customer_mobile: string;
     verified: boolean;
+    video_uploaded: boolean;
   } | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,7 +36,7 @@ const OrderDetails = () => {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('id, order_number, customer_mobile, verified')
+        .select('id, order_number, customer_mobile, verified, video_uploaded')
         .eq('order_number', orderNumber)
         .single();
 
@@ -172,6 +173,13 @@ const OrderDetails = () => {
                   You're verified and ready to record your unboxing video
                 </p>
               </div>
+              
+              {orderData?.video_uploaded && (
+                <div className="bg-yellow-50 text-amber-700 p-4 rounded-lg text-sm mb-4">
+                  <p className="font-medium">You have already uploaded a video for this order</p>
+                  <p>Each order can only have one video submission.</p>
+                </div>
+              )}
 
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="font-medium flex items-center text-brand-blue">
@@ -197,8 +205,9 @@ const OrderDetails = () => {
               <Button 
                 className="w-full"
                 onClick={handleStartRecording}
+                disabled={orderData?.video_uploaded}
               >
-                Start Recording
+                {orderData?.video_uploaded ? "Video Already Submitted" : "Start Recording"}
                 <Camera className="ml-2 h-4 w-4" />
               </Button>
             </div>
