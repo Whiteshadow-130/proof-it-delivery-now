@@ -1,68 +1,52 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import OtpVerification from "@/components/verification/OtpVerification";
-import Instructions from "@/components/video/Instructions";
-import Countdown from "@/components/video/Countdown";
-import VideoPreview from "@/components/video/VideoPreview";
-import { useCamera } from "@/hooks/useCamera";
-import { useVideoRecorder } from "@/hooks/useVideoRecorder";
 
 const VideoRecording = () => {
   const [step, setStep] = useState<"verification" | "instructions" | "countdown" | "recording" | "preview" | "uploading">("verification");
   const [countdown, setCountdown] = useState(3);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
   const [videoAlreadyUploaded, setVideoAlreadyUploaded] = useState(false);
   const [verified, setVerified] = useState(false);
   const [orderData, setOrderData] = useState<any>(null);
   
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
   const navigate = useNavigate();
   const location = useLocation();
-  const orderNumber = new URLSearchParams(location.search).get("order") || "Unknown";
   
-  const { 
-    hasPermission,
-    permissionError,
-    videoRef,
-    streamRef,
-    requestCameraPermission,
-    switchCamera
-  } = useCamera();
-
-  const {
-    recordingTime,
-    recordedVideo,
-    MAX_RECORDING_TIME,
-    startRecording,
-    stopRecording,
-    retakeVideo
-  } = useVideoRecorder(streamRef, videoRef);
+  const orderNumber = new URLSearchParams(location.search).get("order") || "Unknown";
+  const MAX_RECORDING_TIME = 90; // 90 seconds
 
   useEffect(() => {
     checkVideoUploaded();
     fetchOrderDetails();
-  }, [orderNumber]);
 
-  const checkVideoUploaded = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('video_uploaded')
-        .eq('order_number', orderNumber)
-        .single();
-
-      if (error) throw error;
-
-      if (data?.video_uploaded) {
-        setVideoAlreadyUploaded(true);
-        toast.info("You've already recorded and uploaded a video for this order.");
+    // Clean up function
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
       }
-    } catch (err) {
-      console.error("Error checking video upload status:", err);
-    }
-  };
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [orderNumber]);
 
   const fetchOrderDetails = async () => {
     try {
@@ -83,6 +67,10 @@ const VideoRecording = () => {
       if (data.verified) {
         setVerified(true);
         setStep("instructions");
+      } else {
+        // Keep in verification step until verified
+        setStep("verification");
+        toast.info("Please verify your mobile number before recording");
       }
     } catch (error) {
       console.error("Error in fetchOrderDetails:", error);
@@ -90,10 +78,153 @@ const VideoRecording = () => {
     }
   };
 
+  const checkVideoUploaded = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('video_uploaded')
+        .eq('order_number', orderNumber)
+        .single();
+
+      if (error) throw error;
+
+      if (data?.video_uploaded) {
+        setVideoAlreadyUploaded(true);
+        toast.info("You've already recorded and uploaded a video for this order.");
+      }
+    } catch (err) {
+      console.error("Error checking video upload status:", err);
+    }
+  };
+
   const handleVerificationSuccess = () => {
     setVerified(true);
     setStep("instructions");
     toast.success("Verification successful. You can now record your video.");
+  };
+
+  const requestCameraPermission = async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      setCameras(videoDevices);
+      
+      const backCameraIndex = videoDevices.findIndex(
+        device => device.label.toLowerCase().includes('back') || 
+                  device.label.toLowerCase().includes('rear')
+      );
+      
+      const initialCameraIndex = backCameraIndex !== -1 ? backCameraIndex : 0;
+      setCurrentCameraIndex(initialCameraIndex);
+      
+      return await startCameraStream(videoDevices[initialCameraIndex]?.deviceId);
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      setHasPermission(false);
+      setPermissionError("Camera access denied. Please allow camera access and try again.");
+      toast.error("Camera permission denied");
+      return false;
+    }
+  };
+
+  const startCameraStream = async (deviceId?: string) => {
+    try {
+      // Stop any existing stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      // Configure constraints with preferred camera
+      const constraints: MediaStreamConstraints = {
+        audio: true,
+        video: deviceId ? 
+          { deviceId: { exact: deviceId } } : 
+          { facingMode: "environment" }
+      };
+      
+      console.log("Using camera constraints:", constraints);
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        
+        // Make sure to wait for the video to be loaded before playing
+        videoRef.current.onloadedmetadata = async () => {
+          try {
+            await videoRef.current?.play();
+            console.log("Video playback started successfully");
+          } catch (e) {
+            console.error("Error playing video:", e);
+          }
+        };
+      }
+      
+      setHasPermission(true);
+      setPermissionError(null);
+      return true;
+    } catch (err) {
+      console.error("Error starting camera stream:", err);
+      
+      // Fallback to simple constraints if specific camera selection fails
+      try {
+        console.log("Trying fallback camera access");
+        const simpleConstraints: MediaStreamConstraints = {
+          audio: true,
+          video: true
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
+        streamRef.current = stream;
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = async () => {
+            try {
+              await videoRef.current?.play();
+              console.log("Video playback started with fallback constraints");
+            } catch (e) {
+              console.error("Error playing video with fallback:", e);
+            }
+          };
+        }
+        
+        setHasPermission(true);
+        setPermissionError(null);
+        return true;
+      } catch (fallbackErr) {
+        console.error("Fallback camera access also failed:", fallbackErr);
+        setHasPermission(false);
+        setPermissionError("Camera access failed. Please check your device permissions.");
+        return false;
+      }
+    }
+  };
+
+  const switchCamera = async () => {
+    if (cameras.length <= 1) {
+      toast.info("No additional cameras detected on your device");
+      return;
+    }
+    
+    const nextCameraIndex = (currentCameraIndex + 1) % cameras.length;
+    
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      
+      const success = await startCameraStream(cameras[nextCameraIndex].deviceId);
+      
+      if (success) {
+        setCurrentCameraIndex(nextCameraIndex);
+        toast.info(`Switched to ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`);
+      }
+    } catch (error) {
+      console.error("Error switching camera:", error);
+      toast.error("Could not switch to the next camera");
+    }
   };
 
   const startCountdown = async () => {
@@ -121,10 +252,105 @@ const VideoRecording = () => {
       
       if (count <= 0) {
         clearInterval(countdownInterval);
-        setStep("recording");
         startRecording();
       }
     }, 1000);
+  };
+
+  const startRecording = () => {
+    if (!streamRef.current) {
+      toast.error("Could not access camera stream");
+      return;
+    }
+    
+    setStep("recording");
+    setRecordingTime(0);
+    
+    // Make sure video element is properly set up
+    if (videoRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(e => console.error("Error playing video:", e));
+    }
+    
+    // Try different MIME types for better compatibility
+    const mimeTypes = [
+      'video/webm;codecs=vp9,opus', 
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4'
+    ];
+    
+    let options = {};
+    for (const mimeType of mimeTypes) {
+      if (MediaRecorder.isTypeSupported(mimeType)) {
+        options = { mimeType };
+        console.log(`Using MIME type: ${mimeType}`);
+        break;
+      }
+    }
+    
+    try {
+      const mediaRecorder = new MediaRecorder(streamRef.current, options);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+        const videoURL = URL.createObjectURL(blob);
+        setRecordedVideo(videoURL);
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+          videoRef.current.src = videoURL;
+          videoRef.current.play().catch(e => console.error("Error playing video:", e));
+        }
+        
+        setStep("preview");
+      };
+      
+      mediaRecorder.start();
+      console.log("Recording started with mediaRecorder state:", mediaRecorder.state);
+      
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => {
+          if (prev >= MAX_RECORDING_TIME - 1) {
+            stopRecording();
+            return MAX_RECORDING_TIME;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch (error) {
+      console.error("Error starting media recorder:", error);
+      toast.error("Could not start recording. Please try again.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      console.log("Recording stopped");
+    }
+  };
+
+  const retakeVideo = () => {
+    if (recordedVideo) {
+      URL.revokeObjectURL(recordedVideo);
+      setRecordedVideo(null);
+    }
+    
+    setStep("instructions");
+    setRecordingTime(0);
   };
 
   const uploadVideo = async () => {
@@ -169,6 +395,12 @@ const VideoRecording = () => {
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <header className="bg-brand-blue text-white py-4 px-6 shadow-md">
@@ -187,33 +419,188 @@ const VideoRecording = () => {
           )}
           
           {step === "instructions" && (
-            <Instructions
-              orderNumber={orderNumber}
-              videoAlreadyUploaded={videoAlreadyUploaded}
-              permissionError={permissionError}
-              onStartRecording={startCountdown}
-            />
+            <div className="space-y-6">
+              <div className="text-center mb-4">
+                <div className="bg-blue-100 rounded-full p-4 inline-block mb-4">
+                  <Camera className="h-8 w-8 text-brand-accent" />
+                </div>
+                <h1 className="text-2xl font-bold">Record Unboxing Video</h1>
+                <p className="text-gray-600 mt-2">
+                  Order: <span className="font-medium">{orderNumber}</span>
+                </p>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-lg space-y-3">
+                <h3 className="font-medium">Important Instructions:</h3>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-start">
+                    <span className="text-brand-accent mr-2">•</span>
+                    <span>Make sure you have good lighting</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-brand-accent mr-2">•</span>
+                    <span>First show the sealed package with shipping label</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-brand-accent mr-2">•</span>
+                    <span>Then record opening the package and showing the contents</span>
+                  </li>
+                  <li className="flex items-start">
+                    <span className="text-brand-accent mr-2">•</span>
+                    <span>Video will be 30-90 seconds long</span>
+                  </li>
+                </ul>
+              </div>
+
+              {videoAlreadyUploaded && (
+                <div className="bg-yellow-50 text-amber-700 p-4 rounded-lg text-sm">
+                  <p className="font-medium">You have already uploaded a video for this order</p>
+                  <p>Each order can only have one video submission.</p>
+                </div>
+              )}
+
+              {permissionError && (
+                <div className="bg-red-50 text-red-600 p-4 rounded-lg text-sm">
+                  <p className="font-medium">Camera permission required</p>
+                  <p>{permissionError}</p>
+                </div>
+              )}
+
+              <div className="space-y-3">
+                <Button 
+                  className="w-full" 
+                  onClick={startCountdown}
+                  disabled={videoAlreadyUploaded}
+                >
+                  Start Recording
+                  <Video className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           )}
-          
+
           {step === "countdown" && (
-            <Countdown countdown={countdown} />
+            <div className="text-center py-12">
+              <div className="mb-6">
+                <span className="text-6xl font-bold animate-pulse">{countdown}</span>
+              </div>
+              <p className="text-xl">Get ready to record...</p>
+            </div>
           )}
-          
+
           {(step === "recording" || step === "preview" || step === "uploading") && (
-            <VideoPreview
-              step={step}
-              videoRef={videoRef}
-              recordingTime={recordingTime}
-              maxRecordingTime={MAX_RECORDING_TIME}
-              uploadProgress={uploadProgress}
-              onStopRecording={stopRecording}
-              onRetake={() => {
-                retakeVideo();
-                setStep("instructions");
-              }}
-              onUpload={uploadVideo}
-              onSwitchCamera={switchCamera}
-            />
+            <div className="space-y-4">
+              {step === "recording" && (
+                <div className="text-center mb-4">
+                  <h2 className="text-xl font-bold">Recording in progress</h2>
+                  <p className="text-gray-600 text-sm mt-1">
+                    Show the package, label and contents clearly
+                  </p>
+                </div>
+              )}
+
+              {step === "preview" && (
+                <div className="text-center mb-4">
+                  <h2 className="text-xl font-bold">Review your video</h2>
+                  <p className="text-gray-600 text-sm mt-1">
+                    Is everything visible and clear?
+                  </p>
+                </div>
+              )}
+
+              {step === "uploading" && (
+                <div className="text-center mb-4">
+                  <h2 className="text-xl font-bold">Uploading video</h2>
+                  <p className="text-gray-600 text-sm mt-1">
+                    Please wait while we upload your video
+                  </p>
+                </div>
+              )}
+
+              <div className="video-container bg-gray-900 rounded-lg overflow-hidden relative aspect-video">
+                <video
+                  ref={videoRef}
+                  muted={step === "recording"}
+                  playsInline
+                  autoPlay={step === "recording"}
+                  className="w-full h-full object-cover"
+                  style={{ transform: "scaleX(1)" }}
+                />
+                
+                {step === "recording" && (
+                  <>
+                    <div className="absolute top-2 right-2 z-10">
+                      <Button 
+                        size="sm" 
+                        variant="secondary"
+                        className="h-8 w-8 p-0 rounded-full"
+                        onClick={switchCamera}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="recording-indicator absolute top-3 left-3 h-3 w-3 bg-red-500 rounded-full animate-pulse"></div>
+                    <div className="timer absolute bottom-3 left-3 bg-black bg-opacity-50 text-white px-2 py-1 rounded text-sm">
+                      {formatTime(recordingTime)}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {step === "recording" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span>0:00</span>
+                    <span>{formatTime(MAX_RECORDING_TIME)}</span>
+                  </div>
+                  <Progress value={(recordingTime / MAX_RECORDING_TIME) * 100} className="h-2" />
+                  
+                  <Button 
+                    className="w-full bg-red-500 hover:bg-red-600"
+                    onClick={stopRecording}
+                  >
+                    Stop Recording
+                    <X className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {step === "preview" && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button 
+                      variant="outline"
+                      className="w-full" 
+                      onClick={retakeVideo}
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" />
+                      Retake
+                    </Button>
+                    <Button 
+                      className="w-full"
+                      onClick={uploadVideo}
+                    >
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                      Upload
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {step === "uploading" && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Uploading video...</span>
+                    <span className="text-sm font-medium">{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
+                  <p className="text-center text-sm text-gray-500 mt-2">
+                    <Upload className="inline-block mr-1 h-4 w-4" />
+                    Please don't close this page
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </main>
