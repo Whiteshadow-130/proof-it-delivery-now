@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Camera, Video, X, CheckCircle, RotateCcw, Upload, RefreshCw } from "lucide-react";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 const VideoRecording = () => {
@@ -192,10 +192,7 @@ const VideoRecording = () => {
 
   const switchCamera = async () => {
     if (cameras.length <= 1) {
-      toast({
-        title: "Camera switching unavailable",
-        description: "No additional cameras detected on your device.",
-      });
+      toast("Camera switching unavailable - No additional cameras detected on your device.");
       return;
     }
     
@@ -212,18 +209,11 @@ const VideoRecording = () => {
       
       if (success) {
         setCurrentCameraIndex(nextCameraIndex);
-        toast({
-          title: "Camera switched",
-          description: `Using ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`,
-        });
+        toast(`Camera switched to ${cameras[nextCameraIndex].label || 'camera ' + (nextCameraIndex + 1)}`);
       }
     } catch (error) {
       console.error("Error switching camera:", error);
-      toast({
-        title: "Camera switch failed",
-        description: "Could not switch to the next camera",
-        variant: "destructive"
-      });
+      toast("Camera switch failed - Could not switch to the next camera");
     }
   };
 
@@ -380,7 +370,7 @@ const VideoRecording = () => {
       setVideoAlreadyUploaded(true);
     } catch (err) {
       console.error("Error updating video status:", err);
-      toast.error("Failed to update video status");
+      toast("Failed to update video status");
     }
   };
 
