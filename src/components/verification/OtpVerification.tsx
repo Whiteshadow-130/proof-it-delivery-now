@@ -61,6 +61,13 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
     }
   }, [otpSent, countdown]);
   
+  // Auto-send OTP when component mounts
+  useEffect(() => {
+    if (customerMobile && !otpSent) {
+      sendOtp();
+    }
+  }, [customerMobile]);
+  
   const sendOtp = async () => {
     setLoading(true);
     
