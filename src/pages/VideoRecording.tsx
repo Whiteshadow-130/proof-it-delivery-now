@@ -22,6 +22,7 @@ const VideoRecording = () => {
   const location = useLocation();
   const orderNumber = new URLSearchParams(location.search).get("order") || "Unknown";
   
+  // Initialize camera system
   const { 
     hasPermission,
     permissionError,
@@ -31,6 +32,7 @@ const VideoRecording = () => {
     switchCamera
   } = useCamera();
 
+  // Initialize video recorder
   const {
     recordingTime,
     recordedVideo,
@@ -168,6 +170,11 @@ const VideoRecording = () => {
     setStep("preview");
   };
 
+  const handleRetake = () => {
+    retakeVideo();
+    setStep("instructions");
+  };
+
   const uploadVideo = async () => {
     if (!recordedVideo) {
       toast.error("No video recorded");
@@ -284,13 +291,10 @@ const VideoRecording = () => {
               maxRecordingTime={MAX_RECORDING_TIME}
               uploadProgress={uploadProgress}
               onStopRecording={handleStopRecording}
-              onRetake={() => {
-                retakeVideo();
-                setStep("instructions");
-              }}
+              onRetake={handleRetake}
               onUpload={uploadVideo}
               onSwitchCamera={switchCamera}
-              showUpload={showUpload}
+              showUpload={step === "preview"}
             />
           )}
         </div>

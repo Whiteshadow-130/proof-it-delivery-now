@@ -13,9 +13,15 @@ export const useCamera = () => {
   
   const startCameraStream = async (deviceId?: string) => {
     try {
+      console.log("Starting camera stream with deviceId:", deviceId || "default");
+      
       // Stop any existing streams first
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach(track => {
+          console.log("Stopping existing track:", track.kind, track.label);
+          track.stop();
+        });
+        streamRef.current = null;
       }
       
       const constraints: MediaStreamConstraints = {
@@ -25,15 +31,15 @@ export const useCamera = () => {
           { facingMode: "environment" }
       };
       
-      console.log("Requesting camera with constraints:", constraints);
+      console.log("Requesting camera with constraints:", JSON.stringify(constraints));
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log("Got camera stream with tracks:", stream.getTracks());
+      console.log("Got camera stream with tracks:", stream.getTracks().map(t => `${t.kind}: ${t.label}`).join(', '));
       
       streamRef.current = stream;
       
       if (videoRef.current) {
-        console.log("Setting video source object");
+        console.log("Setting video source object to stream");
         videoRef.current.srcObject = stream;
         videoRef.current.style.transform = 'scaleX(-1)'; // Mirror video
         videoRef.current.style.display = 'block'; // Ensure video element is visible
@@ -69,6 +75,7 @@ export const useCamera = () => {
         streamRef.current = stream;
         
         if (videoRef.current) {
+          console.log("Setting video source with fallback stream");
           videoRef.current.srcObject = stream;
           videoRef.current.style.transform = 'scaleX(-1)'; // Mirror video
           videoRef.current.style.display = 'block';
@@ -101,7 +108,7 @@ export const useCamera = () => {
       console.log("Requesting camera devices");
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
-      console.log("Available video devices:", videoDevices);
+      console.log("Available video devices:", videoDevices.map(d => d.label).join(', '));
       
       setCameras(videoDevices);
       

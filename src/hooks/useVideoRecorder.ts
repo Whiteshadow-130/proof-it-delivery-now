@@ -1,5 +1,5 @@
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 
 export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoRef: React.RefObject<HTMLVideoElement>) => {
@@ -13,6 +13,21 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
 
   const MAX_RECORDING_TIME = 90;
 
+  // Reset state when component unmounts
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      if (recordedVideo) {
+        URL.revokeObjectURL(recordedVideo);
+      }
+    };
+  }, []);
+
   const startRecording = () => {
     if (!streamRef.current) {
       console.error("No camera stream available");
@@ -20,10 +35,13 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
       return;
     }
     
-    console.log("Starting recording with stream:", streamRef.current);
+    console.log("Starting recording with stream tracks:", 
+      streamRef.current.getTracks().map(t => `${t.kind}: ${t.label}`).join(', '));
+    
     setRecordingTime(0);
     setIsRecording(true);
     setShowUpload(false);
+    setRecordedVideo(null);
     
     if (videoRef.current) {
       console.log("Preparing video element for recording");
@@ -81,7 +99,7 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
         
         // Explicitly set showUpload to true
         setShowUpload(true);
-        console.log("Setting showUpload to true");
+        console.log("Setting showUpload to true after recording");
         
         if (videoRef.current) {
           console.log("Switching video source to recorded video");

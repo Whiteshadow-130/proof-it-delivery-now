@@ -113,7 +113,7 @@ const VideoPreview = ({
         </div>
       )}
 
-      {step === "preview" && showUpload && (
+      {step === "preview" && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Button 
