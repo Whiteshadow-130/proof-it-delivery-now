@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
-import OtpVerification from "@/components/verification/OtpVerification";
 import Instructions from "@/components/video/Instructions";
 import Countdown from "@/components/video/Countdown";
 import VideoPreview from "@/components/video/VideoPreview";
@@ -11,11 +10,10 @@ import { useCamera } from "@/hooks/useCamera";
 import { useVideoRecorder } from "@/hooks/useVideoRecorder";
 
 const VideoRecording = () => {
-  const [step, setStep] = useState<"verification" | "instructions" | "countdown" | "recording" | "preview" | "uploading">("verification");
+  const [step, setStep] = useState<"instructions" | "countdown" | "recording" | "preview" | "uploading">("instructions");
   const [countdown, setCountdown] = useState(3);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoAlreadyUploaded, setVideoAlreadyUploaded] = useState(false);
-  const [verified, setVerified] = useState(false);
   const [orderData, setOrderData] = useState<any>(null);
   
   const navigate = useNavigate();
@@ -81,31 +79,14 @@ const VideoRecording = () => {
 
       console.log("Found order data:", data);
       setOrderData(data);
-      
-      if (data.verified) {
-        console.log("Order is already verified");
-        setVerified(true);
-        setStep("instructions");
-      }
     } catch (error) {
       console.error("Error in fetchOrderDetails:", error);
       toast.error("An unexpected error occurred");
     }
   };
 
-  const handleVerificationSuccess = () => {
-    console.log("Verification successful");
-    setVerified(true);
-    setStep("instructions");
-    toast.success("Verification successful. You can now record your video.");
-  };
-
   const startCountdown = async () => {
     console.log("Starting countdown");
-    if (!verified) {
-      toast.error("Verification required. Please verify your mobile number before recording a video.");
-      return;
-    }
     
     if (videoAlreadyUploaded) {
       toast.error("You've already recorded and uploaded a video for this order.");
@@ -195,7 +176,8 @@ const VideoRecording = () => {
         .from('orders')
         .update({ 
           video_uploaded: true,
-          status: 'Video Received' 
+          status: 'Video Received',
+          verified: true // Auto-verify without OTP
         })
         .eq('order_number', orderNumber);
 
@@ -220,13 +202,6 @@ const VideoRecording = () => {
 
       <main className="flex-1 container mx-auto px-4 py-8 max-w-md">
         <div className="bg-white rounded-lg shadow-lg p-6">
-          {step === "verification" && (
-            <OtpVerification 
-              orderNumber={orderNumber} 
-              onVerificationSuccess={handleVerificationSuccess} 
-            />
-          )}
-          
           {step === "instructions" && (
             <Instructions
               orderNumber={orderNumber}

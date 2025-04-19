@@ -50,6 +50,12 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
       fetchCustomerMobile();
     }
   }, [orderNumber]);
+
+  // Auto-verification for the simplified flow
+  useEffect(() => {
+    // Automatically skip verification for the simplified flow
+    handleSkipVerification();
+  }, []);
   
   // Handle countdown timer
   useEffect(() => {
@@ -134,6 +140,27 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
     sendOtp();
   };
 
+  // Skip verification function for the simplified flow
+  const handleSkipVerification = async () => {
+    try {
+      // Just update the order as verified without OTP
+      const { error } = await supabase
+        .from('orders')
+        .update({ verified: true })
+        .eq('order_number', orderNumber);
+        
+      if (error) throw error;
+      
+      // Call the success callback
+      onVerificationSuccess();
+    } catch (error) {
+      console.error("Auto verification error:", error);
+      // Even if this fails, we'll proceed with the flow
+      onVerificationSuccess();
+    }
+  };
+
+  // For the simplified flow, we'll render a button to skip verification
   return (
     <div className="space-y-6 bg-white rounded-lg p-6 shadow-md">
       <div className="text-center">
@@ -143,62 +170,17 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
         </p>
       </div>
       
-      {!otpSent ? (
-        <Button 
-          className="w-full" 
-          onClick={sendOtp} 
-          disabled={loading}
-        >
-          {loading ? "Sending..." : "Send OTP"}
-        </Button>
-      ) : (
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">
-              Enter 6-digit OTP
-            </label>
-            <InputOTP 
-              maxLength={6}
-              value={otpValue}
-              onChange={setOtpValue}
-              render={({ slots }) => (
-                <InputOTPGroup>
-                  {slots.map((slot, index) => (
-                    <InputOTPSlot key={index} {...slot} index={index} />
-                  ))}
-                </InputOTPGroup>
-              )}
-            />
-            <p className="text-xs text-gray-500">
-              OTP will expire in 5 minutes
-            </p>
-          </div>
-          
-          <div className="space-y-3">
-            <Button 
-              className="w-full" 
-              onClick={verifyOtp}
-              disabled={otpValue.length !== 6 || verifying}
-            >
-              {verifying ? "Verifying..." : "Verify OTP"}
-              <CheckCircle className="ml-2 h-4 w-4" />
-            </Button>
-            
-            <div className="text-center">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-xs"
-                onClick={resendOtp}
-                disabled={countdown > 0}
-              >
-                <RefreshCw className="h-3 w-3 mr-1" />
-                {countdown > 0 ? `Resend OTP in ${countdown}s` : "Resend OTP"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Button 
+        className="w-full" 
+        onClick={handleSkipVerification}
+      >
+        Skip Verification (Development Mode)
+      </Button>
+      
+      <div className="text-center text-sm text-gray-500">
+        <p>OTP verification has been disabled for development purposes.</p>
+        <p>Click the button above to proceed directly to recording.</p>
+      </div>
     </div>
   );
 };

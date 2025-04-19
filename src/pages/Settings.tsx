@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,14 +9,15 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/components/ui/sonner";
 import { User, Mail, Building, Globe, Bell, Shield, UserPlus, CreditCard } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const Settings = () => {
   const [companySettings, setCompanySettings] = useState({
-    companyName: "Demo Company",
-    email: "demo@proof-it.com",
-    phone: "+1 (555) 123-4567",
-    website: "www.democompany.com",
-    address: "123 Business St, Suite 100\nSan Francisco, CA 94107",
+    companyName: "",
+    email: "",
+    phone: "",
+    website: "",
+    address: "",
     logoUrl: "",
   });
 
@@ -28,6 +28,70 @@ const Settings = () => {
     billingAlerts: true,
     marketingEmails: false,
   });
+  
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUserSettings = async () => {
+      try {
+        setLoading(true);
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.error("No authenticated user found");
+          toast.error("Please log in to view your settings");
+          return;
+        }
+        
+        const { data: settings, error } = await supabase
+          .from('settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error("Error fetching settings:", error);
+          toast.error("Could not load your settings");
+          return;
+        }
+        
+        if (settings) {
+          const userCompanySettings = {
+            companyName: settings.company_name || "",
+            email: settings.email || user.email || "",
+            phone: settings.phone || "",
+            website: settings.website || "",
+            address: settings.address || "",
+            logoUrl: settings.logo_url || "",
+          };
+          
+          const userNotificationSettings = {
+            emailNotifications: settings.notification_email !== null ? settings.notification_email : true,
+            orderUpdates: settings.order_updates !== null ? settings.order_updates : true,
+            videoUploads: settings.video_uploads !== null ? settings.video_uploads : true,
+            billingAlerts: settings.billing_alerts !== null ? settings.billing_alerts : true,
+            marketingEmails: settings.marketing_emails !== null ? settings.marketing_emails : false,
+          };
+          
+          setCompanySettings(userCompanySettings);
+          setNotifications(userNotificationSettings);
+        } else {
+          setCompanySettings({
+            ...companySettings,
+            email: user.email || ""
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching user settings:", error);
+        toast.error("Failed to load your settings");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUserSettings();
+  }, []);
 
   const handleCompanyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -44,12 +108,97 @@ const Settings = () => {
     });
   };
 
-  const handleSaveCompanySettings = () => {
-    toast.success("Company settings saved successfully");
+  const handleSaveCompanySettings = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("You must be logged in to save settings");
+        return;
+      }
+      
+      const settingsData = {
+        user_id: user.id,
+        company_name: companySettings.companyName,
+        email: companySettings.email,
+        phone: companySettings.phone,
+        website: companySettings.website,
+        address: companySettings.address,
+        logo_url: companySettings.logoUrl,
+      };
+      
+      const { data: existingSettings } = await supabase
+        .from('settings')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      let result;
+      
+      if (existingSettings) {
+        result = await supabase
+          .from('settings')
+          .update(settingsData)
+          .eq('user_id', user.id);
+      } else {
+        result = await supabase
+          .from('settings')
+          .insert([settingsData]);
+      }
+      
+      if (result.error) throw result.error;
+      
+      toast.success("Company settings saved successfully");
+    } catch (error) {
+      console.error("Error saving company settings:", error);
+      toast.error("Failed to save settings");
+    }
   };
 
-  const handleSaveNotifications = () => {
-    toast.success("Notification preferences updated");
+  const handleSaveNotifications = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("You must be logged in to save settings");
+        return;
+      }
+      
+      const notificationData = {
+        user_id: user.id,
+        notification_email: notifications.emailNotifications,
+        order_updates: notifications.orderUpdates,
+        video_uploads: notifications.videoUploads,
+        billing_alerts: notifications.billingAlerts,
+        marketing_emails: notifications.marketingEmails,
+      };
+      
+      const { data: existingSettings } = await supabase
+        .from('settings')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      let result;
+      
+      if (existingSettings) {
+        result = await supabase
+          .from('settings')
+          .update(notificationData)
+          .eq('user_id', user.id);
+      } else {
+        result = await supabase
+          .from('settings')
+          .insert([notificationData]);
+      }
+      
+      if (result.error) throw result.error;
+      
+      toast.success("Notification preferences updated");
+    } catch (error) {
+      console.error("Error saving notification settings:", error);
+      toast.error("Failed to save notification preferences");
+    }
   };
 
   return (
@@ -66,200 +215,207 @@ const Settings = () => {
           <TabsTrigger value="billing">Billing</TabsTrigger>
         </TabsList>
 
-        {/* Company Profile Tab */}
         <TabsContent value="company">
           <Card>
             <CardHeader>
               <CardTitle>Company Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Building className="h-4 w-4 text-gray-500" />
-                    <Label htmlFor="companyName">Company Name</Label>
-                  </div>
-                  <Input
-                    id="companyName"
-                    name="companyName"
-                    value={companySettings.companyName}
-                    onChange={handleCompanyChange}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4 text-gray-500" />
-                    <Label htmlFor="email">Email Address</Label>
-                  </div>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={companySettings.email}
-                    onChange={handleCompanyChange}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Globe className="h-4 w-4 text-gray-500" />
-                    <Label htmlFor="website">Website</Label>
-                  </div>
-                  <Input
-                    id="website"
-                    name="website"
-                    value={companySettings.website}
-                    onChange={handleCompanyChange}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <User className="h-4 w-4 text-gray-500" />
-                    <Label htmlFor="phone">Phone Number</Label>
-                  </div>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    value={companySettings.phone}
-                    onChange={handleCompanyChange}
-                  />
-                </div>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="address">Business Address</Label>
-                <Textarea
-                  id="address"
-                  name="address"
-                  rows={3}
-                  value={companySettings.address}
-                  onChange={handleCompanyChange}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="logoUrl">Company Logo</Label>
-                <div className="flex items-center space-x-4">
-                  <div className="h-16 w-16 border rounded flex items-center justify-center bg-gray-50">
-                    {companySettings.logoUrl ? (
-                      <img
-                        src={companySettings.logoUrl}
-                        alt="Company logo"
-                        className="max-h-full max-w-full"
+              {loading ? (
+                <div className="text-center py-4">Loading your company settings...</div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Building className="h-4 w-4 text-gray-500" />
+                        <Label htmlFor="companyName">Company Name</Label>
+                      </div>
+                      <Input
+                        id="companyName"
+                        name="companyName"
+                        value={companySettings.companyName}
+                        onChange={handleCompanyChange}
                       />
-                    ) : (
-                      <Building className="h-6 w-6 text-gray-400" />
-                    )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Mail className="h-4 w-4 text-gray-500" />
+                        <Label htmlFor="email">Email Address</Label>
+                      </div>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        value={companySettings.email}
+                        onChange={handleCompanyChange}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Globe className="h-4 w-4 text-gray-500" />
+                        <Label htmlFor="website">Website</Label>
+                      </div>
+                      <Input
+                        id="website"
+                        name="website"
+                        value={companySettings.website}
+                        onChange={handleCompanyChange}
+                      />
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <User className="h-4 w-4 text-gray-500" />
+                        <Label htmlFor="phone">Phone Number</Label>
+                      </div>
+                      <Input
+                        id="phone"
+                        name="phone"
+                        value={companySettings.phone}
+                        onChange={handleCompanyChange}
+                      />
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <Input
-                      id="logoUrl"
-                      name="logoUrl"
-                      placeholder="Upload a company logo"
-                      type="file"
-                      accept="image/*"
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Business Address</Label>
+                    <Textarea
+                      id="address"
+                      name="address"
+                      rows={3}
+                      value={companySettings.address}
+                      onChange={handleCompanyChange}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Recommended: 400x400px PNG or JPG
-                    </p>
                   </div>
-                </div>
-              </div>
-              
-              <Button onClick={handleSaveCompanySettings}>
-                Save Company Settings
-              </Button>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="logoUrl">Company Logo</Label>
+                    <div className="flex items-center space-x-4">
+                      <div className="h-16 w-16 border rounded flex items-center justify-center bg-gray-50">
+                        {companySettings.logoUrl ? (
+                          <img
+                            src={companySettings.logoUrl}
+                            alt="Company logo"
+                            className="max-h-full max-w-full"
+                          />
+                        ) : (
+                          <Building className="h-6 w-6 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <Input
+                          id="logoUrl"
+                          name="logoUrl"
+                          placeholder="Upload a company logo"
+                          type="file"
+                          accept="image/*"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Recommended: 400x400px PNG or JPG
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Button onClick={handleSaveCompanySettings}>
+                    Save Company Settings
+                  </Button>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Notifications Tab */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <div className="flex items-center">
-                      <Bell className="h-4 w-4 text-gray-500 mr-2" />
-                      <Label>Email Notifications</Label>
+              {loading ? (
+                <div className="text-center py-4">Loading your notification preferences...</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center">
+                        <Bell className="h-4 w-4 text-gray-500 mr-2" />
+                        <Label>Email Notifications</Label>
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        Receive all notifications via email
+                      </p>
                     </div>
-                    <p className="text-sm text-gray-500">
-                      Receive all notifications via email
-                    </p>
+                    <Switch
+                      checked={notifications.emailNotifications}
+                      onCheckedChange={() => handleNotificationChange("emailNotifications")}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.emailNotifications}
-                    onCheckedChange={() => handleNotificationChange("emailNotifications")}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Order Updates</Label>
-                    <p className="text-sm text-gray-500">
-                      Get notified when orders are created or updated
-                    </p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Order Updates</Label>
+                      <p className="text-sm text-gray-500">
+                        Get notified when orders are created or updated
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.orderUpdates}
+                      onCheckedChange={() => handleNotificationChange("orderUpdates")}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.orderUpdates}
-                    onCheckedChange={() => handleNotificationChange("orderUpdates")}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Video Uploads</Label>
-                    <p className="text-sm text-gray-500">
-                      Get notified when customers upload videos
-                    </p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Video Uploads</Label>
+                      <p className="text-sm text-gray-500">
+                        Get notified when customers upload videos
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.videoUploads}
+                      onCheckedChange={() => handleNotificationChange("videoUploads")}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.videoUploads}
-                    onCheckedChange={() => handleNotificationChange("videoUploads")}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Billing Alerts</Label>
-                    <p className="text-sm text-gray-500">
-                      Get notified about wallet balance and payments
-                    </p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Billing Alerts</Label>
+                      <p className="text-sm text-gray-500">
+                        Get notified about wallet balance and payments
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.billingAlerts}
+                      onCheckedChange={() => handleNotificationChange("billingAlerts")}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.billingAlerts}
-                    onCheckedChange={() => handleNotificationChange("billingAlerts")}
-                  />
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Marketing Emails</Label>
-                    <p className="text-sm text-gray-500">
-                      Receive product updates and marketing newsletters
-                    </p>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label>Marketing Emails</Label>
+                      <p className="text-sm text-gray-500">
+                        Receive product updates and marketing newsletters
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notifications.marketingEmails}
+                      onCheckedChange={() => handleNotificationChange("marketingEmails")}
+                    />
                   </div>
-                  <Switch
-                    checked={notifications.marketingEmails}
-                    onCheckedChange={() => handleNotificationChange("marketingEmails")}
-                  />
+                  
+                  <Button onClick={handleSaveNotifications}>
+                    Save Notification Settings
+                  </Button>
                 </div>
-                
-                <Button onClick={handleSaveNotifications}>
-                  Save Notification Settings
-                </Button>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Team Tab */}
         <TabsContent value="team">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -320,7 +476,6 @@ const Settings = () => {
           </Card>
         </TabsContent>
 
-        {/* Billing Tab */}
         <TabsContent value="billing">
           <Card>
             <CardHeader>

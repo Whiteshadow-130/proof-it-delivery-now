@@ -1,4 +1,5 @@
 
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,10 +20,68 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/components/ui/sonner";
 
 const Reports = () => {
   const [timeframe, setTimeframe] = useState("month");
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    videoCompletionRate: 0,
+    issuesReported: 0,
+    avgResponseTime: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Fetch user-specific report data
+  useEffect(() => {
+    const fetchUserStats = async () => {
+      try {
+        setLoading(true);
+        
+        // Get the current user's ID
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.error("No authenticated user found");
+          toast.error("Please log in to view your reports");
+          return;
+        }
+        
+        // Fetch orders for this specific user
+        const { data: orders, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id);
+        
+        if (error) throw error;
+        
+        // Calculate stats based on user-specific data
+        const totalOrders = orders?.length || 0;
+        const videosReceived = orders?.filter(order => order.status === "Video Received").length || 0;
+        
+        // Calculate video completion rate
+        const videoCompletionRate = totalOrders > 0 
+          ? Math.round((videosReceived / totalOrders) * 100) 
+          : 0;
+        
+        setStats({
+          totalOrders,
+          videoCompletionRate,
+          issuesReported: 3, // Placeholder for now
+          avgResponseTime: 1.8 // Placeholder for now
+        });
+        
+      } catch (error) {
+        console.error("Error fetching user stats:", error);
+        toast.error("Failed to load report data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchUserStats();
+  }, []);
 
   return (
     <DashboardLayout>
@@ -58,7 +117,7 @@ const Reports = () => {
           <CardContent>
             <div className="flex justify-between items-center">
               <div>
-                <div className="text-3xl font-bold">128</div>
+                <div className="text-3xl font-bold">{loading ? "..." : stats.totalOrders}</div>
                 <div className="flex items-center text-sm">
                   <span className="flex items-center text-green-600 mr-2">
                     <ArrowUpRight className="h-3 w-3 mr-1" /> 14%
@@ -80,7 +139,7 @@ const Reports = () => {
           <CardContent>
             <div className="flex justify-between items-center">
               <div>
-                <div className="text-3xl font-bold">69.5%</div>
+                <div className="text-3xl font-bold">{loading ? "..." : `${stats.videoCompletionRate}%`}</div>
                 <div className="flex items-center text-sm">
                   <span className="flex items-center text-green-600 mr-2">
                     <ArrowUpRight className="h-3 w-3 mr-1" /> 5.2%
@@ -102,7 +161,7 @@ const Reports = () => {
           <CardContent>
             <div className="flex justify-between items-center">
               <div>
-                <div className="text-3xl font-bold">3</div>
+                <div className="text-3xl font-bold">{loading ? "..." : stats.issuesReported}</div>
                 <div className="flex items-center text-sm">
                   <span className="flex items-center text-green-600 mr-2">
                     <ArrowDownRight className="h-3 w-3 mr-1" /> 40%
@@ -124,7 +183,7 @@ const Reports = () => {
           <CardContent>
             <div className="flex justify-between items-center">
               <div>
-                <div className="text-3xl font-bold">1.8h</div>
+                <div className="text-3xl font-bold">{loading ? "..." : `${stats.avgResponseTime}h`}</div>
                 <div className="flex items-center text-sm">
                   <span className="flex items-center text-red-600 mr-2">
                     <ArrowUpRight className="h-3 w-3 mr-1" /> 12%
