@@ -21,6 +21,7 @@ interface Order {
   customer: string;
   date: string;
   status: string;
+  user_id?: string;
 }
 
 const RecentOrders = () => {
@@ -59,7 +60,8 @@ const RecentOrders = () => {
           awb: order.awb,
           customer: order.customer_name,
           date: new Date(order.created_at).toISOString().split('T')[0],
-          status: order.status
+          status: order.status,
+          user_id: order.user_id
         }));
         
         setOrders(transformedOrders);
