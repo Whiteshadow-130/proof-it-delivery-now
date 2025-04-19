@@ -50,7 +50,7 @@ export const createCompany = async (companyName: string) => {
  * @param companyId The ID of the company the user belongs to
  * @returns The user data or null if there was an error
  */
-export const createUser = async (userId: string, email: string, fullName: string, companyId: string) => {
+export const createUser = async (userId: string, email: string, fullName: string | null, companyId: string) => {
   try {
     console.log('Creating user record for:', userId, email, fullName, companyId);
     
