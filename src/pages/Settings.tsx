@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,16 +38,10 @@ interface SettingsRecord {
   notification_email: boolean | null;
   notification_sms: boolean | null;
   theme: string | null;
-  company_name?: string | null;
-  email?: string | null;
-  phone?: string | null;
-  website?: string | null;
-  address?: string | null;
-  logo_url?: string | null;
-  order_updates?: boolean | null;
-  video_uploads?: boolean | null;
-  billing_alerts?: boolean | null;
-  marketing_emails?: boolean | null;
+  order_updates: boolean | null;
+  video_uploads: boolean | null;
+  billing_alerts: boolean | null;
+  marketing_emails: boolean | null;
 }
 
 const Settings = () => {
