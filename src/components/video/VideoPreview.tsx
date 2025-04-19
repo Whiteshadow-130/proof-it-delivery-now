@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { X, CheckCircle, RotateCcw, Upload, RefreshCw } from "lucide-react";
@@ -30,6 +30,12 @@ const VideoPreview = ({
   onSwitchCamera,
   showUpload = false
 }: VideoPreviewProps) => {
+  
+  // Log component rendering with important props
+  useEffect(() => {
+    console.log(`VideoPreview rendered with step: ${step}, showUpload: ${showUpload}`);
+  }, [step, showUpload]);
+  
   return (
     <div className="space-y-4">
       {step === "recording" && (

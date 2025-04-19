@@ -14,7 +14,7 @@ import {
   User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -67,9 +67,7 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
       toast("Logged out successfully");
     } catch (error) {
       console.error("Logout error:", error);
-      toast("There was an issue logging you out", {
-        variant: "destructive",
-      });
+      toast("There was an issue logging you out");
     }
   };
 

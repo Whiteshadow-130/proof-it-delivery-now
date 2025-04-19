@@ -1,6 +1,6 @@
 
 import { useState, useRef, useEffect } from "react";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 
 export const useCamera = () => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -13,6 +13,7 @@ export const useCamera = () => {
   
   const startCameraStream = async (deviceId?: string) => {
     try {
+      // Stop any existing streams first
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -27,34 +28,26 @@ export const useCamera = () => {
       console.log("Requesting camera with constraints:", constraints);
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("Got camera stream with tracks:", stream.getTracks());
       
-      console.log("Got camera stream:", stream);
       streamRef.current = stream;
       
       if (videoRef.current) {
+        console.log("Setting video source object");
         videoRef.current.srcObject = stream;
+        videoRef.current.style.transform = 'scaleX(-1)'; // Mirror video
         videoRef.current.style.display = 'block'; // Ensure video element is visible
+        videoRef.current.muted = true; // Prevent feedback during recording
+        videoRef.current.playsInline = true; // Better mobile support
         
-        await new Promise<void>((resolve) => {
-          if (!videoRef.current) {
-            resolve();
-            return;
-          }
-          
-          videoRef.current.onloadedmetadata = () => {
-            console.log("Video metadata loaded");
-            resolve();
-          };
-        });
-        
-        if (videoRef.current) {
-          try {
-            await videoRef.current.play();
-            console.log("Video is playing");
-          } catch (e) {
-            console.error("Error playing video:", e);
-          }
+        try {
+          await videoRef.current.play();
+          console.log("Video is now playing");
+        } catch (e) {
+          console.error("Error playing video:", e);
         }
+      } else {
+        console.error("Video ref is null, cannot attach stream");
       }
       
       setHasPermission(true);
@@ -77,27 +70,16 @@ export const useCamera = () => {
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.style.transform = 'scaleX(-1)'; // Mirror video
           videoRef.current.style.display = 'block';
+          videoRef.current.muted = true;
+          videoRef.current.playsInline = true;
           
-          await new Promise<void>((resolve) => {
-            if (!videoRef.current) {
-              resolve();
-              return;
-            }
-            
-            videoRef.current.onloadedmetadata = () => {
-              console.log("Fallback video metadata loaded");
-              resolve();
-            };
-          });
-          
-          if (videoRef.current) {
-            try {
-              await videoRef.current.play();
-              console.log("Fallback video is playing");
-            } catch (e) {
-              console.error("Error playing fallback video:", e);
-            }
+          try {
+            await videoRef.current.play();
+            console.log("Fallback video is playing");
+          } catch (e) {
+            console.error("Error playing fallback video:", e);
           }
         }
         
@@ -128,6 +110,7 @@ export const useCamera = () => {
                   device.label.toLowerCase().includes('rear')
       );
       
+      // Prefer back camera on mobile if available
       const initialCameraIndex = backCameraIndex !== -1 ? backCameraIndex : 0;
       setCurrentCameraIndex(initialCameraIndex);
       
@@ -168,6 +151,7 @@ export const useCamera = () => {
     }
   };
 
+  // Clean up on unmount
   useEffect(() => {
     return () => {
       if (streamRef.current) {

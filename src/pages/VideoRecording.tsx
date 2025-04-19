@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -81,6 +82,11 @@ const VideoRecording = () => {
     fetchOrderDetails();
   }, [orderNumber]);
 
+  // Log state changes to help with debugging
+  useEffect(() => {
+    console.log("State updated - step:", step, "isRecording:", isRecording, "showUpload:", showUpload);
+  }, [step, isRecording, showUpload]);
+
   const checkVideoUploaded = async () => {
     try {
       const { data, error } = await supabase
@@ -155,6 +161,13 @@ const VideoRecording = () => {
     }, 1000);
   };
 
+  // Handle stopping the recording
+  const handleStopRecording = () => {
+    console.log("Handling stop recording");
+    stopRecording();
+    setStep("preview");
+  };
+
   const uploadVideo = async () => {
     if (!recordedVideo) {
       toast.error("No video recorded");
@@ -181,6 +194,7 @@ const VideoRecording = () => {
       // Create storage path that includes user_id and company_id
       const filePath = `companies/${companyId}/users/${userId}/orders/${orderNumber}/${fileName}`;
       
+      // Simulate upload progress
       let uploadProgress = 0;
       const interval = setInterval(() => {
         uploadProgress += Math.random() * 10;
@@ -229,6 +243,7 @@ const VideoRecording = () => {
       clearInterval(interval);
       setUploadProgress(100);
       
+      // Redirect to thank you page
       setTimeout(() => {
         navigate(`/thank-you?order=${orderNumber}`);
       }, 500);
@@ -268,7 +283,7 @@ const VideoRecording = () => {
               recordingTime={recordingTime}
               maxRecordingTime={MAX_RECORDING_TIME}
               uploadProgress={uploadProgress}
-              onStopRecording={stopRecording}
+              onStopRecording={handleStopRecording}
               onRetake={() => {
                 retakeVideo();
                 setStep("instructions");
