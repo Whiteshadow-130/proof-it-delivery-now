@@ -38,7 +38,7 @@ export const useCamera = () => {
       
       streamRef.current = stream;
       
-      if (videoRef.current) {
+      if (videoRef.current && stream) {
         console.log("Setting video source object to stream");
         videoRef.current.srcObject = stream;
         videoRef.current.style.transform = 'scaleX(-1)'; // Mirror video
@@ -53,7 +53,7 @@ export const useCamera = () => {
           console.error("Error playing video:", e);
         }
       } else {
-        console.error("Video ref is null, cannot attach stream");
+        console.error("Video ref is null or stream is null, cannot attach stream");
       }
       
       setHasPermission(true);
@@ -74,7 +74,7 @@ export const useCamera = () => {
         console.log("Got fallback camera stream:", stream);
         streamRef.current = stream;
         
-        if (videoRef.current) {
+        if (videoRef.current && stream) {
           console.log("Setting video source with fallback stream");
           videoRef.current.srcObject = stream;
           videoRef.current.style.transform = 'scaleX(-1)'; // Mirror video

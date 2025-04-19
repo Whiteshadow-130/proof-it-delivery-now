@@ -52,10 +52,13 @@ const VideoRecording = () => {
         
         if (!user) {
           console.log("No authenticated user");
+          toast.error("Please log in to record a video");
+          navigate('/login', { state: { returnUrl: location.pathname + location.search } });
           return;
         }
         
         setUserId(user.id);
+        console.log("Set user ID:", user.id);
         
         // Get user's company_id
         const { data: userData, error: userError } = await supabase
@@ -66,17 +69,25 @@ const VideoRecording = () => {
           
         if (userError) {
           console.error("Error fetching user data:", userError);
+          toast.error("Could not retrieve user information");
           return;
         }
         
-        setCompanyId(userData?.company_id || null);
+        if (userData?.company_id) {
+          setCompanyId(userData.company_id);
+          console.log("Set company ID:", userData.company_id);
+        } else {
+          console.error("No company ID found for user");
+          toast.error("User account is not associated with a company");
+        }
       } catch (error) {
         console.error("Error fetching user info:", error);
+        toast.error("An error occurred while loading user data");
       }
     };
     
     getUserInfo();
-  }, []);
+  }, [navigate, location]);
 
   // Check if order exists and if video already uploaded
   useEffect(() => {
@@ -97,7 +108,10 @@ const VideoRecording = () => {
         .eq('order_number', orderNumber)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error checking video upload status:", error);
+        return;
+      }
 
       if (data?.video_uploaded) {
         setVideoAlreadyUploaded(true);
@@ -176,8 +190,30 @@ const VideoRecording = () => {
   };
 
   const uploadVideo = async () => {
+    console.log("Starting upload with userData:", { userId, companyId, orderData, recordedVideo });
+    
     if (!recordedVideo) {
       toast.error("No video recorded");
+      return;
+    }
+    
+    if (!userId) {
+      toast.error("Missing user ID for upload");
+      return;
+    }
+    
+    if (!companyId) {
+      toast.error("Missing company ID for upload");
+      return;
+    }
+    
+    if (!orderData) {
+      toast.error("Missing order data for upload");
+      return;
+    }
+    
+    if (!orderNumber) {
+      toast.error("Missing order number for upload");
       return;
     }
     
@@ -185,14 +221,14 @@ const VideoRecording = () => {
     setUploadProgress(0);
     
     try {
-      if (!userId || !companyId || !orderData) {
-        toast.error("Missing required data for upload");
-        return;
-      }
-      
       // Fetch the video blob
       const response = await fetch(recordedVideo);
       const blob = await response.blob();
+      
+      if (!blob || blob.size === 0) {
+        toast.error("Video data is empty or corrupted");
+        return;
+      }
       
       // Generate a unique filename with order number
       const timestamp = Date.now();
@@ -200,6 +236,8 @@ const VideoRecording = () => {
       
       // Create storage path that includes user_id and company_id
       const filePath = `companies/${companyId}/users/${userId}/orders/${orderNumber}/${fileName}`;
+      
+      console.log("Uploading video to path:", filePath);
       
       // Simulate upload progress
       let uploadProgress = 0;
@@ -220,15 +258,19 @@ const VideoRecording = () => {
           
       if (uploadError) {
         console.error("Error uploading video:", uploadError);
-        toast.error("Video upload failed");
+        toast.error("Video upload failed: " + uploadError.message);
         clearInterval(interval);
         return;
       }
+      
+      console.log("Upload successful:", uploadData);
       
       // Get the public URL of the uploaded video
       const { data: { publicUrl } } = supabase.storage
         .from('videos')
         .getPublicUrl(filePath);
+      
+      console.log("Video public URL:", publicUrl);
       
       // Update order with video URL and metadata
       const { error: updateError } = await supabase
@@ -294,7 +336,7 @@ const VideoRecording = () => {
               onRetake={handleRetake}
               onUpload={uploadVideo}
               onSwitchCamera={switchCamera}
-              showUpload={step === "preview"}
+              showUpload={showUpload}
             />
           )}
         </div>
