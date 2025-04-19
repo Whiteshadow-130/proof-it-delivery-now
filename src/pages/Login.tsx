@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -14,7 +15,18 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await signIn(email, password);
+    
+    if (!email || !password) {
+      toast.error("Please enter both email and password");
+      return;
+    }
+    
+    try {
+      await signIn(email, password);
+    } catch (error) {
+      console.error("Login error:", error);
+      // Toast is handled in the signIn function
+    }
   };
 
   return (

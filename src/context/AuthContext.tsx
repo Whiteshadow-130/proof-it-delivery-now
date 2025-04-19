@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, ensureUserExists } from '@/integrations/supabase/client';
@@ -40,6 +39,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               toast.error('There was a problem with your account setup', {
                 description: 'Please try signing out and back in'
               });
+              // Don't redirect to dashboard if user data not found
             } else {
               console.log('User data verified after sign in:', userData);
               
@@ -98,6 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      setLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -107,27 +108,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       toast.success('Login successful');
       
-      const origin = location.state?.from?.pathname || '/dashboard';
-      navigate(origin);
-      
-      const userData = await ensureUserExists();
-      
-      if (!userData) {
-        console.warn("User authenticated but profile data could not be verified");
-        toast.error('There was a problem with your account setup', {
-          description: 'Please refresh or contact support if issues persist'
-        });
-      }
+      // Wait for authentication to register
+      setTimeout(async () => {
+        console.log('Running ensureUserExists after login');
+        const userData = await ensureUserExists();
+        
+        if (!userData) {
+          console.warn("User authenticated but profile data could not be verified");
+          toast.error('There was a problem with your account setup', {
+            description: 'Please refresh or contact support if issues persist'
+          });
+        } else {
+          const origin = location.state?.from?.pathname || '/dashboard';
+          navigate(origin);
+        }
+      }, 500);
     } catch (error: any) {
       toast.error('Login failed', {
         description: error.message || 'Please check your credentials',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, fullName: string, companyName: string) => {
     try {
-      // First, create the auth user
+      setLoading(true);
+      // Create the auth user with metadata
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -136,34 +144,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             full_name: fullName,
             company_name: companyName,
           },
-          // Don't automatically sign in after registration
           emailRedirectTo: `${window.location.origin}/login`
         },
       });
 
       if (error) throw error;
-
-      // Don't try to immediately create the user record here
-      // Wait for verification instead
       
-      toast.success('Account created successfully', {
-        description: 'Please check your email for verification and then log in',
-      });
-      
-      // Sign out the user to complete registration flow
-      await supabase.auth.signOut();
-      navigate('/login');
+      if (data?.user) {
+        toast.success('Account created successfully');
+        
+        // Don't wait for email verification if unnecessary
+        // Uncomment this code if user records need to be created immediately
+        /*
+        // Force creation of user record
+        const companyId = await createCompany(companyName);
+        if (companyId) {
+          await createUser(data.user.id, email, fullName, companyId);
+          navigate('/dashboard');
+          return;
+        }
+        */
+        
+        // Otherwise use normal flow with email verification
+        toast.info('Please check your email for verification and then log in');
+        
+        // Sign out the user to complete registration flow
+        await supabase.auth.signOut();
+        navigate('/login');
+      }
     } catch (error: any) {
       console.error("Registration error:", error);
       toast.error('Registration failed', {
         description: error.message || 'Please try again with different details',
       });
-      throw error; // Re-throw to be caught by the form handler
+    } finally {
+      setLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
+      setLoading(true);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       navigate('/login');
@@ -171,6 +192,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       toast.error('Sign out failed', {
         description: error.message,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
