@@ -135,34 +135,46 @@ export type Database = {
       }
       settings: {
         Row: {
+          billing_alerts: boolean | null
           company_id: string | null
           created_at: string
           id: string
+          marketing_emails: boolean | null
           notification_email: boolean | null
           notification_sms: boolean | null
+          order_updates: boolean | null
           theme: string | null
           updated_at: string
           user_id: string
+          video_uploads: boolean | null
         }
         Insert: {
+          billing_alerts?: boolean | null
           company_id?: string | null
           created_at?: string
           id?: string
+          marketing_emails?: boolean | null
           notification_email?: boolean | null
           notification_sms?: boolean | null
+          order_updates?: boolean | null
           theme?: string | null
           updated_at?: string
           user_id: string
+          video_uploads?: boolean | null
         }
         Update: {
+          billing_alerts?: boolean | null
           company_id?: string | null
           created_at?: string
           id?: string
+          marketing_emails?: boolean | null
           notification_email?: boolean | null
           notification_sms?: boolean | null
+          order_updates?: boolean | null
           theme?: string | null
           updated_at?: string
           user_id?: string
+          video_uploads?: boolean | null
         }
         Relationships: [
           {

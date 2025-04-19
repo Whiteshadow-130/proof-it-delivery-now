@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -129,11 +128,11 @@ const Settings = () => {
         };
         
         const userNotificationSettings = {
-          emailNotifications: settings?.notification_email !== null ? settings?.notification_email : true,
-          orderUpdates: settings?.order_updates !== null ? settings?.order_updates : true,
-          videoUploads: settings?.video_uploads !== null ? settings?.video_uploads : true,
-          billingAlerts: settings?.billing_alerts !== null ? settings?.billing_alerts : true,
-          marketingEmails: settings?.marketing_emails !== null ? settings?.marketing_emails : false,
+          emailNotifications: settings?.notification_email ?? true,
+          orderUpdates: settings?.order_updates ?? true,
+          videoUploads: settings?.video_uploads ?? true,
+          billingAlerts: settings?.billing_alerts ?? true,
+          marketingEmails: settings?.marketing_emails ?? false,
         };
         
         setCompanySettings(userCompanySettings);
