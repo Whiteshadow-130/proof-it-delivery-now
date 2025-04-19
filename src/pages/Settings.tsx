@@ -28,6 +28,26 @@ interface NotificationSettings {
   marketingEmails: boolean;
 }
 
+interface SettingsRecord {
+  id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+  notification_email: boolean | null;
+  notification_sms: boolean | null;
+  theme: string | null;
+  company_name: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  address: string | null;
+  logo_url: string | null;
+  order_updates: boolean | null;
+  video_uploads: boolean | null;
+  billing_alerts: boolean | null;
+  marketing_emails: boolean | null;
+}
+
 const Settings = () => {
   const [companySettings, setCompanySettings] = useState<CompanySettings>({
     companyName: "",
@@ -74,21 +94,23 @@ const Settings = () => {
         }
         
         if (settings) {
+          const typedSettings = settings as SettingsRecord;
+          
           const userCompanySettings = {
-            companyName: settings.company_name || "",
-            email: settings.email || user.email || "",
-            phone: settings.phone || "",
-            website: settings.website || "",
-            address: settings.address || "",
-            logoUrl: settings.logo_url || "",
+            companyName: typedSettings.company_name || "",
+            email: typedSettings.email || user.email || "",
+            phone: typedSettings.phone || "",
+            website: typedSettings.website || "",
+            address: typedSettings.address || "",
+            logoUrl: typedSettings.logo_url || "",
           };
           
           const userNotificationSettings = {
-            emailNotifications: settings.notification_email !== null ? settings.notification_email : true,
-            orderUpdates: settings.order_updates !== null ? settings.order_updates : true,
-            videoUploads: settings.video_uploads !== null ? settings.video_uploads : true,
-            billingAlerts: settings.billing_alerts !== null ? settings.billing_alerts : true,
-            marketingEmails: settings.marketing_emails !== null ? settings.marketing_emails : false,
+            emailNotifications: typedSettings.notification_email !== null ? typedSettings.notification_email : true,
+            orderUpdates: typedSettings.order_updates !== null ? typedSettings.order_updates : true,
+            videoUploads: typedSettings.video_uploads !== null ? typedSettings.video_uploads : true,
+            billingAlerts: typedSettings.billing_alerts !== null ? typedSettings.billing_alerts : true,
+            marketingEmails: typedSettings.marketing_emails !== null ? typedSettings.marketing_emails : false,
           };
           
           setCompanySettings(userCompanySettings);
