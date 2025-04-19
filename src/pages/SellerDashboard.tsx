@@ -9,7 +9,7 @@ import WeeklyStats from "@/components/dashboard/WeeklyStats";
 import RecentOrders from "@/components/dashboard/RecentOrders";
 import NewOrderDialog from "@/components/dashboard/NewOrderDialog";
 import { Package, Video, PackageCheck, PackageX } from "lucide-react";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 const SellerDashboard = () => {
@@ -21,31 +21,78 @@ const SellerDashboard = () => {
     issuesReported: 0
   });
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+
+  // Get current user and company ID
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.error("User not authenticated");
+          return;
+        }
+        
+        setUserId(user.id);
+        
+        // Get user's company_id
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', user.id)
+          .single();
+          
+        if (userError) {
+          console.error("Error fetching user data:", userError);
+          return;
+        }
+        
+        setCompanyId(userData?.company_id || null);
+      } catch (error) {
+        console.error("Error fetching user info:", error);
+      }
+    };
+    
+    fetchUserInfo();
+  }, []);
 
   // Fetch dashboard stats
   useEffect(() => {
     const fetchStats = async () => {
+      if (!userId) return;
+      
       try {
         setLoading(true);
         
-        // Fetch all orders
-        const { data: orders, error } = await supabase
+        // Fetch all orders for the current user/company
+        const query = supabase
           .from('orders')
           .select('*');
+          
+        // Filter by user ID or company ID
+        if (companyId) {
+          query.eq('company_id', companyId);
+        } else {
+          query.eq('user_id', userId);
+        }
+        
+        const { data: orders, error } = await query;
         
         if (error) throw error;
         
         if (orders) {
           const videosReceived = orders.filter(order => order.status === "Video Received").length;
           const successfulDeliveries = orders.filter(order => order.verified).length;
-          // For issues, we'll just use a placeholder count for now
-          const issuesReported = 3;
+          // For issues, calculate based on non-verified videos that were uploaded
+          const issuesReported = orders.filter(order => order.video_uploaded && !order.verified).length;
           
           setStats({
             totalOrders: orders.length,
             videosReceived,
             successfulDeliveries,
-            issuesReported
+            issuesReported: issuesReported || 0
           });
         }
       } catch (error) {
@@ -56,14 +103,22 @@ const SellerDashboard = () => {
     };
     
     fetchStats();
-  }, []);
+  }, [userId, companyId]);
 
-  const handleNewOrderSubmit = async (orderData) => {
+  const handleNewOrderSubmit = async (orderData: any) => {
     try {
+      // Check if user is authenticated
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("You must be logged in to create an order");
+        return;
+      }
+      
       // Generate a unique order number
       const orderNumber = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
       
-      // Save to Supabase
+      // Save to Supabase with user_id and company_id
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -72,7 +127,9 @@ const SellerDashboard = () => {
           customer_name: orderData.customerName,
           customer_mobile: orderData.customerMobile,
           channel: orderData.channel,
-          status: 'QR Generated'
+          status: 'QR Generated',
+          user_id: user.id,
+          company_id: companyId
         });
       
       if (error) throw error;

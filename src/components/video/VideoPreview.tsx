@@ -120,8 +120,8 @@ const VideoPreview = ({
               className="w-full"
               onClick={onUpload}
             >
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Upload
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Video
             </Button>
           </div>
         </div>

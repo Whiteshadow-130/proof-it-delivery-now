@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { User, Mail, Building, Globe, Bell, Shield, UserPlus, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -26,21 +26,6 @@ interface NotificationSettings {
   videoUploads: boolean;
   billingAlerts: boolean;
   marketingEmails: boolean;
-}
-
-interface SettingsRecord {
-  id: string;
-  user_id: string;
-  company_id: string | null;
-  created_at: string;
-  updated_at: string;
-  notification_email: boolean | null;
-  notification_sms: boolean | null;
-  theme: string | null;
-  order_updates: boolean | null;
-  video_uploads: boolean | null;
-  billing_alerts: boolean | null;
-  marketing_emails: boolean | null;
 }
 
 const Settings = () => {
@@ -73,7 +58,9 @@ const Settings = () => {
         
         if (!user) {
           console.error("No authenticated user found");
-          toast.error("Please log in to view your settings");
+          toast("Please log in to view your settings", {
+            description: "User authentication required",
+          });
           return;
         }
         
@@ -85,7 +72,9 @@ const Settings = () => {
         
         if (userError) {
           console.error("Error fetching user data:", userError);
-          toast.error("Could not load your user data");
+          toast("Could not load your user data", {
+            description: userError.message,
+          });
           return;
         }
         
@@ -114,7 +103,9 @@ const Settings = () => {
         
         if (error && error.code !== 'PGRST116') {
           console.error("Error fetching settings:", error);
-          toast.error("Could not load your settings");
+          toast("Could not load your settings", {
+            description: error.message,
+          });
           return;
         }
         
@@ -139,7 +130,9 @@ const Settings = () => {
         setNotifications(userNotificationSettings);
       } catch (error) {
         console.error("Error fetching user settings:", error);
-        toast.error("Failed to load your settings");
+        toast("Failed to load your settings", {
+          description: error instanceof Error ? error.message : "Unknown error",
+        });
       } finally {
         setLoading(false);
       }
@@ -156,10 +149,10 @@ const Settings = () => {
     });
   };
 
-  const handleNotificationChange = (setting: string) => {
+  const handleNotificationChange = (setting: keyof NotificationSettings) => {
     setNotifications({
       ...notifications,
-      [setting]: !notifications[setting as keyof typeof notifications],
+      [setting]: !notifications[setting],
     });
   };
 
@@ -168,7 +161,9 @@ const Settings = () => {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        toast.error("You must be logged in to save settings");
+        toast("You must be logged in to save settings", {
+          description: "Authentication required",
+        });
         return;
       }
       
@@ -180,13 +175,15 @@ const Settings = () => {
       
       if (userError) {
         console.error("Error fetching user data:", userError);
-        toast.error("Could not verify your account");
+        toast("Could not verify your account", {
+          description: userError.message,
+        });
         return;
       }
       
-      let companyId = userData?.company_id;
+      let currentCompanyId = userData?.company_id;
       
-      if (!companyId) {
+      if (!currentCompanyId) {
         const { data: newCompany, error: createError } = await supabase
           .from('companies')
           .insert([{
@@ -200,21 +197,29 @@ const Settings = () => {
           .single();
         
         if (createError) {
-          throw createError;
+          console.error("Error creating company:", createError);
+          toast("Failed to create company", {
+            description: createError.message,
+          });
+          return;
         }
         
-        companyId = newCompany.id;
+        currentCompanyId = newCompany.id;
         
         const { error: updateUserError } = await supabase
           .from('users')
-          .update({ company_id: companyId })
+          .update({ company_id: currentCompanyId })
           .eq('id', user.id);
         
         if (updateUserError) {
-          throw updateUserError;
+          console.error("Error updating user with company_id:", updateUserError);
+          toast("Failed to associate company with your account", {
+            description: updateUserError.message,
+          });
+          return;
         }
         
-        setCompanyId(companyId);
+        setCompanyId(currentCompanyId);
       } else {
         const { error: updateCompanyError } = await supabase
           .from('companies')
@@ -225,17 +230,25 @@ const Settings = () => {
             address: companySettings.address,
             logo_url: companySettings.logoUrl
           })
-          .eq('id', companyId);
+          .eq('id', currentCompanyId);
         
         if (updateCompanyError) {
-          throw updateCompanyError;
+          console.error("Error updating company:", updateCompanyError);
+          toast("Failed to update company settings", {
+            description: updateCompanyError.message,
+          });
+          return;
         }
       }
       
-      toast.success("Company settings saved successfully");
+      toast("Company settings saved successfully", {
+        description: "Your company information has been updated",
+      });
     } catch (error) {
       console.error("Error saving company settings:", error);
-      toast.error("Failed to save settings");
+      toast("Failed to save settings", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 
@@ -244,7 +257,9 @@ const Settings = () => {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        toast.error("You must be logged in to save settings");
+        toast("You must be logged in to save settings", {
+          description: "Authentication required",
+        });
         return;
       }
       
@@ -277,12 +292,22 @@ const Settings = () => {
           .insert([notificationData]);
       }
       
-      if (result.error) throw result.error;
+      if (result.error) {
+        console.error("Error saving notification settings:", result.error);
+        toast("Failed to save notification preferences", {
+          description: result.error.message,
+        });
+        return;
+      }
       
-      toast.success("Notification preferences updated");
+      toast("Notification preferences updated", {
+        description: "Your notification settings have been saved",
+      });
     } catch (error) {
       console.error("Error saving notification settings:", error);
-      toast.error("Failed to save notification preferences");
+      toast("Failed to save notification preferences", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
     }
   };
 
@@ -394,12 +419,12 @@ const Settings = () => {
                         <Input
                           id="logoUrl"
                           name="logoUrl"
-                          placeholder="Upload a company logo"
-                          type="file"
-                          accept="image/*"
+                          value={companySettings.logoUrl}
+                          onChange={handleCompanyChange}
+                          placeholder="Enter logo URL"
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          Recommended: 400x400px PNG or JPG
+                          Enter the URL of your company logo
                         </p>
                       </div>
                     </div>
