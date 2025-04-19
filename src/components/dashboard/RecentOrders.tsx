@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download } from "lucide-react";
@@ -5,6 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Order {
   id: string;
@@ -98,38 +107,38 @@ const RecentOrders = () => {
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-3 px-4 font-medium">Order ID</th>
-                <th className="text-left py-3 px-4 font-medium">AWB</th>
-                <th className="text-left py-3 px-4 font-medium">Customer</th>
-                <th className="text-left py-3 px-4 font-medium">Date</th>
-                <th className="text-left py-3 px-4 font-medium">Status</th>
-                <th className="text-right py-3 px-4 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Order ID</TableHead>
+                <TableHead>AWB</TableHead>
+                <TableHead>Customer</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-gray-500 py-8">
                     Loading recent orders...
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : orders.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-500">
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-gray-500 py-8">
                     No orders found. Create a new order to get started.
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : (
                 orders.map((order) => (
-                  <tr key={order.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">{order.id}</td>
-                    <td className="py-3 px-4">{order.awb}</td>
-                    <td className="py-3 px-4">{order.customer}</td>
-                    <td className="py-3 px-4">{order.date}</td>
-                    <td className="py-3 px-4">
+                  <TableRow key={order.id} className="hover:bg-gray-50">
+                    <TableCell>{order.id}</TableCell>
+                    <TableCell>{order.awb}</TableCell>
+                    <TableCell>{order.customer}</TableCell>
+                    <TableCell>{order.date}</TableCell>
+                    <TableCell>
                       <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           order.status === "Video Received"
@@ -141,8 +150,8 @@ const RecentOrders = () => {
                       >
                         {order.status}
                       </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
+                    </TableCell>
+                    <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -151,12 +160,12 @@ const RecentOrders = () => {
                       >
                         {getButtonText(order.status)}
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </CardContent>
     </Card>
