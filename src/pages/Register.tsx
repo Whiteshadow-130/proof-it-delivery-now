@@ -49,13 +49,11 @@ const Register = () => {
         formData.companyName
       );
       toast.success("Registration successful");
-      toast.info("Please check your email for verification instructions. After verifying, you'll need to log in.");
+      toast.info("You can now log in with your email");
       navigate('/login');
     } catch (error: any) {
       console.error("Registration error:", error);
-      toast.error("Registration failed", {
-        description: error.message || "Please try again",
-      });
+      // Error is already handled in signUp
     } finally {
       setIsSubmitting(false);
     }
@@ -77,6 +75,9 @@ const Register = () => {
             <div className="text-center mb-8">
               <h1 className="text-2xl font-bold">Create your account</h1>
               <p className="text-gray-600">Start securing your deliveries today</p>
+              <p className="mt-2 text-sm text-blue-600">
+                (Simplified registration: Direct database user creation)
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">

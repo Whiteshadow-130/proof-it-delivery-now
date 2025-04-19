@@ -18,109 +18,89 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 });
 
 /**
- * Ensures that the authenticated user exists in the users table.
- * This function should be called after authentication.
- * @returns The user data from the users table, or null if there was an error
+ * Creates a company record and returns the company ID
+ * @param companyName The name of the company to create
+ * @returns The ID of the created company
  */
-export const ensureUserExists = async () => {
+export const createCompany = async (companyName: string): Promise<string | null> => {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data, error } = await supabase
+      .from('companies')
+      .insert([{ name: companyName }])
+      .select('id')
+      .single();
     
-    if (!user) {
-      console.error('No authenticated user found');
+    if (error) {
+      console.error('Error creating company:', error);
       return null;
     }
     
-    console.log('Ensuring user exists for ID:', user.id);
+    return data.id;
+  } catch (error) {
+    console.error('Exception in createCompany:', error);
+    return null;
+  }
+};
+
+/**
+ * Creates a user record in the users table
+ * @param userId A manually generated UUID for the user
+ * @param email The user's email
+ * @param fullName The user's full name
+ * @param companyId The ID of the company the user belongs to
+ * @returns The created user data or null if there was an error
+ */
+export const createUser = async (
+  userId: string,
+  email: string,
+  fullName: string | null,
+  companyId: string
+) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .insert([{
+        id: userId,
+        email,
+        full_name: fullName,
+        company_id: companyId
+      }])
+      .select('*, companies(name, website, phone, address, logo_url)')
+      .single();
     
-    // Check if user exists in the users table
-    const { data: existingUser, error: checkError } = await supabase
+    if (error) {
+      console.error('Error creating user record:', error);
+      return null;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Exception in createUser:', error);
+    return null;
+  }
+};
+
+/**
+ * Gets a user by email
+ * @param email The email to look up
+ * @returns The user data or null if not found
+ */
+export const getUserByEmail = async (email: string) => {
+  try {
+    const { data, error } = await supabase
       .from('users')
       .select('*, companies(name, website, phone, address, logo_url)')
-      .eq('id', user.id)
-      .maybeSingle(); 
+      .eq('email', email)
+      .maybeSingle();
     
-    if (checkError) {
-      console.error('Error checking if user exists:', checkError);
-      console.error('Error details:', JSON.stringify(checkError));
+    if (error) {
+      console.error('Error fetching user by email:', error);
       return null;
     }
     
-    // If user doesn't exist, create them
-    if (!existingUser) {
-      console.log('User not found in database, creating new user record');
-      
-      // Step 1: Create company
-      let companyId: string | null = null;
-      const companyName = user.user_metadata?.company_name || 'Default Company';
-      
-      try {
-        // Using RPC call to create company with elevated privileges
-        const { data: companyData, error: companyError } = await supabase.rpc(
-          'create_company_for_user',
-          { company_name: companyName }
-        );
-        
-        if (companyError) {
-          console.error('Error creating company:', companyError);
-          console.error('Company error details:', JSON.stringify(companyError));
-          return null;
-        }
-        
-        if (!companyData) {
-          console.error('No company ID returned');
-          return null;
-        }
-        
-        companyId = companyData;
-        console.log('Created company successfully with ID:', companyId);
-      } catch (error) {
-        console.error('Error in company creation:', error);
-        console.error('Company creation error details:', JSON.stringify(error));
-        return null;
-      }
-      
-      if (!companyId) {
-        console.error('Failed to get company ID after creation');
-        return null;
-      }
-      
-      // Step 2: Create user with the company ID
-      console.log('Attempting to insert user with ID:', user.id, 'and company ID:', companyId);
-      
-      try {
-        const { data: newUser, error: insertError } = await supabase
-          .from('users')
-          .insert([{
-            id: user.id,
-            email: user.email || '',
-            full_name: user.user_metadata?.full_name || null,
-            avatar_url: user.user_metadata?.avatar_url || null,
-            company_id: companyId
-          }])
-          .select('*, companies(name, website, phone, address, logo_url)')
-          .single();
-        
-        if (insertError) {
-          console.error('Error creating user record:', insertError);
-          console.error('Insert error details:', JSON.stringify(insertError));
-          return null;
-        }
-        
-        console.log('Created new user record successfully:', newUser);
-        return newUser;
-      } catch (insertCatchError) {
-        console.error('Exception during user insertion:', insertCatchError);
-        console.error('Insert catch error details:', JSON.stringify(insertCatchError));
-        return null;
-      }
-    }
-    
-    console.log('Found existing user record:', existingUser);
-    return existingUser;
+    return data;
   } catch (error) {
-    console.error('Error in ensureUserExists:', error);
-    console.error('Error details:', JSON.stringify(error));
+    console.error('Exception in getUserByEmail:', error);
     return null;
   }
 };

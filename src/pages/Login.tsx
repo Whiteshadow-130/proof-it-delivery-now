@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -14,7 +15,18 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await signIn(email, password);
+    
+    if (!email) {
+      toast.error("Email is required");
+      return;
+    }
+    
+    try {
+      await signIn(email, password);
+    } catch (error) {
+      // Error is already handled in signIn
+      console.error("Login submission error:", error);
+    }
   };
 
   return (
@@ -33,6 +45,9 @@ const Login = () => {
             <div className="text-center mb-8">
               <h1 className="text-2xl font-bold">Welcome back</h1>
               <p className="text-gray-600">Log in to your Proof-It dashboard</p>
+              <p className="mt-2 text-sm text-blue-600">
+                (Simplified login: Enter any registered email, password check disabled)
+              </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
