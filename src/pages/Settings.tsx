@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { User, Mail, Building, Globe, Bell, Shield, UserPlus, CreditCard } from "lucide-react";
 import { supabase, ensureUserExists } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 
 interface CompanySettings {
   companyName: string;
@@ -38,6 +39,7 @@ interface TeamMember {
 }
 
 const Settings = () => {
+  const { user } = useAuth();
   const [companySettings, setCompanySettings] = useState<CompanySettings>({
     companyName: "",
     email: "",
@@ -64,7 +66,15 @@ const Settings = () => {
       try {
         setLoading(true);
         
-        // Ensure user exists in our database first
+        if (!user) {
+          console.error("No authenticated user");
+          toast.error("You must be logged in to view settings");
+          return;
+        }
+        
+        console.log("Fetching settings for user:", user.id);
+        
+        // First ensure the user exists in our database
         const userData = await ensureUserExists();
         
         if (!userData) {
@@ -74,10 +84,43 @@ const Settings = () => {
           return;
         }
         
-        setCompanyId(userData?.company_id || null);
+        console.log("User data from database:", userData);
+        setCompanyId(userData.company_id || null);
         
+        // If the user has no company_id, create a company for them
+        if (!userData.company_id) {
+          console.log("User has no company, creating one");
+          const defaultCompanyName = user.user_metadata?.company_name || "My Company";
+          
+          const { data: newCompany, error: companyError } = await supabase
+            .from('companies')
+            .insert([{
+              name: defaultCompanyName,
+            }])
+            .select()
+            .single();
+          
+          if (companyError) {
+            console.error("Error creating company:", companyError);
+          } else if (newCompany) {
+            // Update the user with the new company_id
+            const { error: updateError } = await supabase
+              .from('users')
+              .update({ company_id: newCompany.id })
+              .eq('id', user.id);
+            
+            if (updateError) {
+              console.error("Error updating user with company_id:", updateError);
+            } else {
+              console.log("Created and assigned new company:", newCompany);
+              setCompanyId(newCompany.id);
+            }
+          }
+        }
+        
+        // Now fetch the company data if available
         let companyData = null;
-        if (userData?.company_id) {
+        if (userData.company_id) {
           const { data: company, error: companyError } = await supabase
             .from('companies')
             .select('*')
@@ -88,12 +131,14 @@ const Settings = () => {
             console.error("Error fetching company:", companyError);
           } else {
             companyData = company;
+            console.log("Fetched company data:", companyData);
           }
           
           // Fetch team members if company_id exists
           fetchTeamMembers(userData.company_id);
         }
         
+        // Fetch notification settings
         const { data: settings, error } = await supabase
           .from('settings')
           .select('*')
@@ -102,12 +147,14 @@ const Settings = () => {
         
         if (error && error.code !== 'PGRST116') {
           console.error("Error fetching settings:", error);
-          toast("Could not load your settings", {
+          toast.error("Could not load your settings", {
             description: error.message,
           });
-          return;
+        } else {
+          console.log("Fetched notification settings:", settings);
         }
         
+        // Set up the company settings form
         const userCompanySettings = {
           companyName: companyData?.name || "",
           email: userData?.email || "",
@@ -117,6 +164,7 @@ const Settings = () => {
           logoUrl: companyData?.logo_url || "",
         };
         
+        // Set up the notification settings
         const userNotificationSettings = {
           emailNotifications: settings?.notification_email ?? true,
           orderUpdates: settings?.order_updates ?? true,
@@ -129,7 +177,7 @@ const Settings = () => {
         setNotifications(userNotificationSettings);
       } catch (error) {
         console.error("Error fetching user settings:", error);
-        toast("Failed to load your settings", {
+        toast.error("Failed to load your settings", {
           description: error instanceof Error ? error.message : "Unknown error",
         });
       } finally {
@@ -137,8 +185,10 @@ const Settings = () => {
       }
     };
     
-    fetchUserSettings();
-  }, []);
+    if (user) {
+      fetchUserSettings();
+    }
+  }, [user]);
 
   const fetchTeamMembers = async (companyId: string) => {
     try {
@@ -162,6 +212,7 @@ const Settings = () => {
         }));
         
         setTeamMembers(formattedTeamMembers);
+        console.log("Fetched team members:", formattedTeamMembers);
       }
     } catch (error) {
       console.error("Error in fetchTeamMembers:", error);
@@ -185,7 +236,12 @@ const Settings = () => {
 
   const handleSaveCompanySettings = async () => {
     try {
-      // Ensure user exists in our database
+      if (!user) {
+        toast.error("You must be logged in to save settings");
+        return;
+      }
+
+      // First ensure the user exists in our database
       const userData = await ensureUserExists();
       
       if (!userData) {
@@ -195,7 +251,7 @@ const Settings = () => {
         return;
       }
       
-      let currentCompanyId = userData?.company_id;
+      let currentCompanyId = companyId;
       
       if (!currentCompanyId) {
         // Create a new company if one doesn't exist
@@ -220,12 +276,13 @@ const Settings = () => {
         }
         
         currentCompanyId = newCompany.id;
+        setCompanyId(currentCompanyId);
         
         // Update the user with the new company_id
         const { error: updateUserError } = await supabase
           .from('users')
           .update({ company_id: currentCompanyId })
-          .eq('id', userData.id);
+          .eq('id', user.id);
         
         if (updateUserError) {
           console.error("Error updating user with company_id:", updateUserError);
@@ -234,8 +291,6 @@ const Settings = () => {
           });
           return;
         }
-        
-        setCompanyId(currentCompanyId);
       } else {
         // Update existing company
         const { error: updateCompanyError } = await supabase
@@ -271,6 +326,11 @@ const Settings = () => {
 
   const handleSaveNotifications = async () => {
     try {
+      if (!user) {
+        toast.error("You must be logged in to save settings");
+        return;
+      }
+      
       // Ensure user exists in our database
       const userData = await ensureUserExists();
       
@@ -282,7 +342,7 @@ const Settings = () => {
       }
       
       const notificationData = {
-        user_id: userData.id,
+        user_id: user.id,
         company_id: companyId,
         notification_email: notifications.emailNotifications,
         order_updates: notifications.orderUpdates,
@@ -292,11 +352,15 @@ const Settings = () => {
       };
       
       // Check if settings already exist for this user
-      const { data: existingSettings } = await supabase
+      const { data: existingSettings, error: checkError } = await supabase
         .from('settings')
         .select('id')
-        .eq('user_id', userData.id)
+        .eq('user_id', user.id)
         .maybeSingle();
+      
+      if (checkError) {
+        console.error("Error checking settings:", checkError);
+      }
       
       let result;
       
@@ -305,7 +369,7 @@ const Settings = () => {
         result = await supabase
           .from('settings')
           .update(notificationData)
-          .eq('user_id', userData.id);
+          .eq('user_id', user.id);
       } else {
         // Create new settings
         result = await supabase

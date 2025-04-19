@@ -31,12 +31,14 @@ export const ensureUserExists = async () => {
       return null;
     }
     
+    console.log('Ensuring user exists for ID:', user.id);
+    
     // Check if user exists in the users table
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
       .select('*')
       .eq('id', user.id)
-      .maybeSingle();
+      .maybeSingle(); // Use maybeSingle instead of single to prevent errors if no row is found
     
     if (checkError) {
       console.error('Error checking if user exists:', checkError);
@@ -45,6 +47,7 @@ export const ensureUserExists = async () => {
     
     // If user doesn't exist, create them
     if (!existingUser) {
+      console.log('User not found in database, creating new user record');
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
@@ -61,9 +64,11 @@ export const ensureUserExists = async () => {
         return null;
       }
       
+      console.log('Created new user record successfully:', newUser);
       return newUser;
     }
     
+    console.log('Found existing user record:', existingUser);
     return existingUser;
   } catch (error) {
     console.error('Error in ensureUserExists:', error);

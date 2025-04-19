@@ -28,13 +28,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // First set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
+        console.log('Auth state changed:', event);
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
         if (event === 'SIGNED_IN') {
           // Ensure user exists in users table after sign in
+          // Using setTimeout to prevent deadlocks with Supabase auth
           setTimeout(async () => {
-            await ensureUserExists();
+            const userData = await ensureUserExists();
+            if (!userData) {
+              console.warn('User authenticated but profile data could not be created/verified');
+              toast.error('There was a problem with your account setup', {
+                description: 'Please try signing out and back in'
+              });
+            } else {
+              console.log('User data verified after sign in:', userData);
+            }
           }, 0);
         } else if (event === 'SIGNED_OUT') {
           // Redirect to login page on sign out
@@ -44,17 +54,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     // Then get the initial session
-    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-      setSession(currentSession);
-      setUser(currentSession?.user ?? null);
-      
-      if (currentSession?.user) {
-        // Ensure user exists in users table
-        await ensureUserExists();
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          // Ensure user exists in users table
+          const userData = await ensureUserExists();
+          
+          if (!userData) {
+            console.warn('User authenticated but profile data could not be created/verified on init');
+          } else {
+            console.log('User data verified on init:', userData);
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
-    });
+    };
+
+    initializeAuth();
 
     return () => {
       subscription.unsubscribe();
@@ -71,18 +95,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) throw error;
       
-      // Ensure user data exists in our database
-      const userData = await ensureUserExists();
-      
-      if (!userData) {
-        console.warn("User authenticated but profile data could not be verified");
-      }
-      
       toast.success('Login successful');
       
       // Get the redirect path from location state or default to dashboard
       const origin = location.state?.from?.pathname || '/dashboard';
       navigate(origin);
+      
+      // Ensure user data exists in our database
+      const userData = await ensureUserExists();
+      
+      if (!userData) {
+        console.warn("User authenticated but profile data could not be verified");
+        toast.error('There was a problem with your account setup', {
+          description: 'Please refresh or contact support if issues persist'
+        });
+      }
     } catch (error: any) {
       toast.error('Login failed', {
         description: error.message || 'Please check your credentials',
@@ -110,13 +137,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data: { user: newUser } } = await supabase.auth.getUser();
       
       if (newUser) {
+        // Create a company first
+        const { data: company, error: companyError } = await supabase
+          .from('companies')
+          .insert({
+            name: companyName,
+          })
+          .select()
+          .single();
+        
+        if (companyError) {
+          console.error('Error creating company:', companyError);
+          throw companyError;
+        }
+        
+        const companyId = company?.id;
+        
+        // Then create the user with the company ID
         const { error: profileError } = await supabase
           .from('users')
           .insert({
             id: newUser.id,
             email: email,
             full_name: fullName,
-            company_name: companyName,
+            company_id: companyId
           });
         
         if (profileError) throw profileError;
