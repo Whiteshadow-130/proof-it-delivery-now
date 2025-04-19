@@ -54,22 +54,42 @@ export const ensureUserExists = async () => {
       const companyName = user.user_metadata?.company_name || 'Default Company';
       
       // Create a company first if needed
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .insert({
-          name: companyName
-        })
-        .select()
-        .single();
+      // Using the auth user to bypass RLS
+      const { data: company, error: companyError } = await supabase.rpc('create_company_for_user', {
+        company_name: companyName
+      });
       
       if (companyError) {
-        console.error('Error creating company:', companyError);
+        console.error('Error creating company using RPC:', companyError);
+        
+        // Fallback to direct insert with service role
+        console.log('Attempting direct company creation');
+        const { data: directCompany, error: directCompanyError } = await supabase
+          .from('companies')
+          .insert({
+            name: companyName
+          })
+          .select()
+          .single();
+        
+        if (directCompanyError) {
+          console.error('Error on direct company creation:', directCompanyError);
+          return null;
+        }
+        
+        companyId = directCompany?.id;
+      } else {
+        companyId = company?.id;
+      }
+      
+      console.log('Created company successfully with ID:', companyId);
+      
+      if (!companyId) {
+        console.error('Failed to get company ID after creation');
         return null;
       }
       
-      companyId = company?.id;
-      console.log('Created company successfully with ID:', companyId);
-      
+      // Now create the user record with the company ID
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{

@@ -1,3 +1,4 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, ensureUserExists } from '@/integrations/supabase/client';
@@ -40,6 +41,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               });
             } else {
               console.log('User data verified after sign in:', userData);
+              
+              // If coming from login page, redirect to dashboard
+              if (location.pathname === '/login' || location.pathname === '/register') {
+                navigate('/dashboard');
+              }
             }
           }, 0);
         } else if (event === 'SIGNED_OUT') {
@@ -60,6 +66,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           
           if (!userData) {
             console.warn('User authenticated but profile data could not be created/verified on init');
+            
+            // If on a protected page, redirect to login
+            if (location.pathname !== '/login' && location.pathname !== '/register' && 
+                location.pathname !== '/' && !location.pathname.startsWith('/proof')) {
+              toast.error('Account setup incomplete', { 
+                description: 'Please log in again to complete setup' 
+              });
+              await supabase.auth.signOut();
+              navigate('/login');
+            }
           } else {
             console.log('User data verified on init:', userData);
           }
@@ -76,7 +92,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -109,7 +125,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signUp = async (email: string, password: string, fullName: string, companyName: string) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      // First, create the auth user
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -117,15 +134,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             full_name: fullName,
             company_name: companyName,
           },
+          // Don't automatically sign in after registration
+          emailRedirectTo: `${window.location.origin}/login`
         },
       });
 
       if (error) throw error;
       
+      // Attempt to immediately create the user and company records even before verification
+      if (data.user) {
+        try {
+          // This will create both company and user entries in their respective tables
+          await ensureUserExists();
+          console.log("Initial user and company records created during registration");
+        } catch (dbError) {
+          console.error("Failed to create initial database records:", dbError);
+          // Continue with registration even if this fails - will try again at login
+        }
+      }
+      
       toast.success('Account created successfully', {
         description: 'Please check your email for verification and then log in',
       });
       
+      // Sign out the user to complete registration flow
+      await supabase.auth.signOut();
       navigate('/login');
     } catch (error: any) {
       console.error("Registration error:", error);
