@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { User, Mail, Building, Globe, Bell, Shield, UserPlus, CreditCard } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, ensureUserExists } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 
 interface CompanySettings {
@@ -73,7 +73,6 @@ const Settings = () => {
         
         console.log("Fetching settings for user:", user.id);
         
-        // First ensure the user exists in our database with properly linked company
         const { data: userData, error: userError } = await supabase
           .from('users')
           .select('*, companies(name, website, phone, address, logo_url)')
@@ -90,11 +89,9 @@ const Settings = () => {
         
         console.log("User data from database:", userData);
         
-        // The user data should now include the company data
         const companyData = userData.companies;
         setCompanyId(userData.company_id || null);
         
-        // Set up the company settings form with data we got from the join
         const userCompanySettings = {
           companyName: companyData?.name || "",
           email: userData?.email || "",
@@ -104,7 +101,6 @@ const Settings = () => {
           logoUrl: companyData?.logo_url || "",
         };
         
-        // Fetch notification settings
         const { data: settings, error } = await supabase
           .from('settings')
           .select('*')
@@ -120,7 +116,6 @@ const Settings = () => {
           console.log("Fetched notification settings:", settings);
         }
         
-        // Set up the notification settings
         const userNotificationSettings = {
           emailNotifications: settings?.notification_email ?? true,
           orderUpdates: settings?.order_updates ?? true,
@@ -132,12 +127,10 @@ const Settings = () => {
         setCompanySettings(userCompanySettings);
         setNotifications(userNotificationSettings);
         
-        // Fetch team members if company_id exists
         if (userData.company_id) {
           fetchTeamMembers(userData.company_id);
         }
         
-        // Fetch subscription data from transactions table
         if (userData.company_id) {
           fetchSubscriptionData(userData.company_id);
         }
@@ -187,9 +180,6 @@ const Settings = () => {
 
   const fetchSubscriptionData = async (companyId: string) => {
     try {
-      // This would typically fetch from a subscriptions table
-      // For now, we'll use a mock subscription based on transactions
-      
       const { data: transactions, error } = await supabase
         .from('transactions')
         .select('*')
@@ -201,7 +191,6 @@ const Settings = () => {
         return;
       }
       
-      // Calculate total balance from transactions
       let balance = 0;
       if (transactions) {
         for (const tx of transactions) {
@@ -213,7 +202,6 @@ const Settings = () => {
         }
       }
       
-      // Determine plan type based on balance
       let planType = 'Basic';
       if (balance >= 2000) {
         planType = 'Enterprise';
@@ -221,7 +209,6 @@ const Settings = () => {
         planType = 'Pro';
       }
       
-      // In a real app, you'd get this from a subscriptions table
       console.log(`Determined plan type: ${planType} based on balance: ${balance}`);
     } catch (error) {
       console.error("Error fetching subscription data:", error);
@@ -250,7 +237,6 @@ const Settings = () => {
         return;
       }
 
-      // First ensure the user exists in our database
       const userData = await ensureUserExists();
       
       if (!userData) {
@@ -260,7 +246,6 @@ const Settings = () => {
         return;
       }
       
-      // Now update the company with our settings
       const { error: updateCompanyError } = await supabase
         .from('companies')
         .update({
@@ -298,7 +283,6 @@ const Settings = () => {
         return;
       }
       
-      // Ensure user exists in our database
       const userData = await ensureUserExists();
       
       if (!userData) {
@@ -318,7 +302,6 @@ const Settings = () => {
         marketing_emails: notifications.marketingEmails,
       };
       
-      // Check if settings already exist for this user
       const { data: existingSettings, error: checkError } = await supabase
         .from('settings')
         .select('id')
@@ -332,13 +315,11 @@ const Settings = () => {
       let result;
       
       if (existingSettings) {
-        // Update existing settings
         result = await supabase
           .from('settings')
           .update(notificationData)
           .eq('user_id', user.id);
       } else {
-        // Create new settings
         result = await supabase
           .from('settings')
           .insert([notificationData]);

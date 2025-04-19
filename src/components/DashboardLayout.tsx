@@ -1,4 +1,3 @@
-
 import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -65,15 +64,10 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const handleLogout = async () => {
     try {
       await signOut();
-      toast({
-        title: "Logged out",
-        description: "You have been logged out successfully",
-      });
+      toast("Logged out successfully");
     } catch (error) {
       console.error("Logout error:", error);
-      toast({
-        title: "Logout failed",
-        description: "There was an issue logging you out",
+      toast("There was an issue logging you out", {
         variant: "destructive",
       });
     }
