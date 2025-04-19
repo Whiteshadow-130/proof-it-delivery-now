@@ -120,6 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Sign up with email and password
   const signUp = async (email: string, password: string, fullName: string, companyName: string) => {
     try {
+      // Step 1: Sign up the user in Supabase Auth
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -133,37 +134,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) throw error;
       
-      // Now insert the user profile data
+      // Step 2: Get the newly created user
       const { data: { user: newUser } } = await supabase.auth.getUser();
       
       if (newUser) {
-        // Create a company first
-        const { data: company, error: companyError } = await supabase
-          .from('companies')
-          .insert({
-            name: companyName,
-          })
-          .select()
-          .single();
-        
-        if (companyError) {
-          console.error('Error creating company:', companyError);
-          throw companyError;
+        try {
+          // Step 3: Create a company
+          console.log("Creating company for new user:", companyName);
+          const { data: company, error: companyError } = await supabase
+            .from('companies')
+            .insert({
+              name: companyName,
+            })
+            .select()
+            .single();
+          
+          if (companyError) {
+            console.error('Error creating company:', companyError);
+            throw companyError;
+          }
+          
+          if (!company) {
+            throw new Error("Company was not created");
+          }
+          
+          const companyId = company.id;
+          console.log("Company created successfully with ID:", companyId);
+          
+          // Step 4: Create user record
+          console.log("Creating user record:", { id: newUser.id, email, full_name: fullName, company_id: companyId });
+          const { error: userError } = await supabase
+            .from('users')
+            .insert({
+              id: newUser.id,
+              email: email,
+              full_name: fullName,
+              company_id: companyId
+            });
+          
+          if (userError) {
+            console.error('Error creating user record:', userError);
+            throw userError;
+          }
+          
+          console.log("User record created successfully");
+        } catch (err) {
+          console.error("Error during registration db setup:", err);
+          throw err;
         }
-        
-        const companyId = company?.id;
-        
-        // Then create the user with the company ID
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: newUser.id,
-            email: email,
-            full_name: fullName,
-            company_id: companyId
-          });
-        
-        if (profileError) throw profileError;
       }
       
       toast.success('Account created successfully', {
@@ -172,9 +190,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       navigate('/login');
     } catch (error: any) {
+      console.error("Registration error:", error);
       toast.error('Registration failed', {
         description: error.message || 'Please try again with different details',
       });
+      throw error; // Re-throw to be caught by the form handler
     }
   };
 

@@ -1,10 +1,11 @@
 
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "@/components/ui/sonner";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -14,7 +15,9 @@ const Register = () => {
     password: "",
     confirmPassword: "",
   });
-  const { signUp, loading } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { signUp } = useAuth();
+  const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -28,16 +31,33 @@ const Register = () => {
     e.preventDefault();
     
     if (formData.password !== formData.confirmPassword) {
-      // Show error - handled by AuthContext
+      toast.error("Passwords do not match");
       return;
     }
 
-    await signUp(
-      formData.email,
-      formData.password,
-      formData.fullName,
-      formData.companyName
-    );
+    if (formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await signUp(
+        formData.email,
+        formData.password,
+        formData.fullName,
+        formData.companyName
+      );
+      toast.success("Registration successful");
+      navigate("/login");
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      toast.error("Registration failed", {
+        description: error.message || "Please try again",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -122,8 +142,8 @@ const Register = () => {
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Creating account..." : "Create account"}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? "Creating account..." : "Create account"}
               </Button>
             </form>
 

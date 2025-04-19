@@ -48,13 +48,35 @@ export const ensureUserExists = async () => {
     // If user doesn't exist, create them
     if (!existingUser) {
       console.log('User not found in database, creating new user record');
+      
+      // First check if user has company_name in metadata
+      let companyId = null;
+      const companyName = user.user_metadata?.company_name || 'Default Company';
+      
+      // Create a company first if needed
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .insert({
+          name: companyName
+        })
+        .select()
+        .single();
+      
+      if (companyError) {
+        console.error('Error creating company:', companyError);
+        return null;
+      }
+      
+      companyId = company?.id;
+      
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
           id: user.id,
           email: user.email || '',
           full_name: user.user_metadata?.full_name || null,
-          avatar_url: user.user_metadata?.avatar_url || null
+          avatar_url: user.user_metadata?.avatar_url || null,
+          company_id: companyId
         }])
         .select()
         .single();
