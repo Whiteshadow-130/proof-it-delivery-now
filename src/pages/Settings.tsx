@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { User, Mail, Building, Globe, Bell, Shield, UserPlus, CreditCard } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, ensureUserExists } from "@/integrations/supabase/client";
 
 interface CompanySettings {
   companyName: string;
@@ -26,6 +26,14 @@ interface NotificationSettings {
   videoUploads: boolean;
   billingAlerts: boolean;
   marketingEmails: boolean;
+}
+
+interface TeamMember {
+  id: string;
+  fullName: string;
+  email: string;
+  role: string;
+  status: string;
 }
 
 const Settings = () => {
@@ -46,6 +54,7 @@ const Settings = () => {
     marketingEmails: false,
   });
   
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
 
@@ -54,26 +63,11 @@ const Settings = () => {
       try {
         setLoading(true);
         
-        const { data: { user } } = await supabase.auth.getUser();
+        const userData = await ensureUserExists();
         
-        if (!user) {
-          console.error("No authenticated user found");
-          toast("Please log in to view your settings", {
-            description: "User authentication required",
-          });
-          return;
-        }
-        
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('company_id, email')
-          .eq('id', user.id)
-          .single();
-        
-        if (userError) {
-          console.error("Error fetching user data:", userError);
-          toast("Could not load your user data", {
-            description: userError.message,
+        if (!userData) {
+          toast.error("Could not verify your account", {
+            description: "Please log in again",
           });
           return;
         }
@@ -86,19 +80,21 @@ const Settings = () => {
             .from('companies')
             .select('*')
             .eq('id', userData.company_id)
-            .single();
+            .maybeSingle();
             
           if (companyError) {
             console.error("Error fetching company:", companyError);
           } else {
             companyData = company;
           }
+          
+          fetchTeamMembers(userData.company_id);
         }
         
         const { data: settings, error } = await supabase
           .from('settings')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('user_id', userData.id)
           .maybeSingle();
         
         if (error && error.code !== 'PGRST116') {
@@ -111,7 +107,7 @@ const Settings = () => {
         
         const userCompanySettings = {
           companyName: companyData?.name || "",
-          email: userData?.email || user.email || "",
+          email: userData?.email || "",
           phone: companyData?.phone || "",
           website: companyData?.website || "",
           address: companyData?.address || "",
@@ -141,6 +137,34 @@ const Settings = () => {
     fetchUserSettings();
   }, []);
 
+  const fetchTeamMembers = async (companyId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('team_members')
+        .select('*')
+        .eq('company_id', companyId);
+        
+      if (error) {
+        console.error("Error fetching team members:", error);
+        return;
+      }
+      
+      if (data) {
+        const formattedTeamMembers = data.map(member => ({
+          id: member.id,
+          fullName: member.full_name || 'No name',
+          email: member.email,
+          role: member.role,
+          status: member.status
+        }));
+        
+        setTeamMembers(formattedTeamMembers);
+      }
+    } catch (error) {
+      console.error("Error in fetchTeamMembers:", error);
+    }
+  };
+
   const handleCompanyChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setCompanySettings({
@@ -158,25 +182,11 @@ const Settings = () => {
 
   const handleSaveCompanySettings = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const userData = await ensureUserExists();
       
-      if (!user) {
-        toast("You must be logged in to save settings", {
-          description: "Authentication required",
-        });
-        return;
-      }
-      
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('company_id')
-        .eq('id', user.id)
-        .single();
-      
-      if (userError) {
-        console.error("Error fetching user data:", userError);
-        toast("Could not verify your account", {
-          description: userError.message,
+      if (!userData) {
+        toast.error("Could not verify your account", {
+          description: "Please try logging in again",
         });
         return;
       }
@@ -198,7 +208,7 @@ const Settings = () => {
         
         if (createError) {
           console.error("Error creating company:", createError);
-          toast("Failed to create company", {
+          toast.error("Failed to create company", {
             description: createError.message,
           });
           return;
@@ -209,11 +219,11 @@ const Settings = () => {
         const { error: updateUserError } = await supabase
           .from('users')
           .update({ company_id: currentCompanyId })
-          .eq('id', user.id);
+          .eq('id', userData.id);
         
         if (updateUserError) {
           console.error("Error updating user with company_id:", updateUserError);
-          toast("Failed to associate company with your account", {
+          toast.error("Failed to associate company with your account", {
             description: updateUserError.message,
           });
           return;
@@ -234,19 +244,19 @@ const Settings = () => {
         
         if (updateCompanyError) {
           console.error("Error updating company:", updateCompanyError);
-          toast("Failed to update company settings", {
+          toast.error("Failed to update company settings", {
             description: updateCompanyError.message,
           });
           return;
         }
       }
       
-      toast("Company settings saved successfully", {
+      toast.success("Company settings saved successfully", {
         description: "Your company information has been updated",
       });
     } catch (error) {
       console.error("Error saving company settings:", error);
-      toast("Failed to save settings", {
+      toast.error("Failed to save settings", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
     }
@@ -254,17 +264,17 @@ const Settings = () => {
 
   const handleSaveNotifications = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const userData = await ensureUserExists();
       
-      if (!user) {
-        toast("You must be logged in to save settings", {
+      if (!userData) {
+        toast.error("You must be logged in to save settings", {
           description: "Authentication required",
         });
         return;
       }
       
       const notificationData = {
-        user_id: user.id,
+        user_id: userData.id,
         company_id: companyId,
         notification_email: notifications.emailNotifications,
         order_updates: notifications.orderUpdates,
@@ -276,7 +286,7 @@ const Settings = () => {
       const { data: existingSettings } = await supabase
         .from('settings')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', userData.id)
         .maybeSingle();
       
       let result;
@@ -285,7 +295,7 @@ const Settings = () => {
         result = await supabase
           .from('settings')
           .update(notificationData)
-          .eq('user_id', user.id);
+          .eq('user_id', userData.id);
       } else {
         result = await supabase
           .from('settings')
@@ -294,21 +304,61 @@ const Settings = () => {
       
       if (result.error) {
         console.error("Error saving notification settings:", result.error);
-        toast("Failed to save notification preferences", {
+        toast.error("Failed to save notification preferences", {
           description: result.error.message,
         });
         return;
       }
       
-      toast("Notification preferences updated", {
+      toast.success("Notification preferences updated", {
         description: "Your notification settings have been saved",
       });
     } catch (error) {
       console.error("Error saving notification settings:", error);
-      toast("Failed to save notification preferences", {
+      toast.error("Failed to save notification preferences", {
         description: error instanceof Error ? error.message : "Unknown error",
       });
     }
+  };
+
+  const renderTeamMembers = () => {
+    if (teamMembers.length === 0) {
+      return (
+        <div className="text-center py-4 text-gray-500">
+          No team members found. Add your first team member.
+        </div>
+      );
+    }
+
+    return (
+      <div className="border rounded-lg divide-y">
+        {teamMembers.map((member) => (
+          <div key={member.id} className="p-4 flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className={`${member.status === 'active' ? "bg-blue-100" : "bg-gray-100"} rounded-full p-2 text-blue-600`}>
+                <User className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-medium">{member.fullName}</p>
+                <p className="text-sm text-gray-500">{member.email}</p>
+              </div>
+            </div>
+            <div className="flex items-center">
+              <span className={`${
+                member.role === 'admin' 
+                  ? "bg-green-100 text-green-800" 
+                  : "bg-blue-100 text-blue-800"
+              } text-xs px-2.5 py-0.5 rounded-full mr-2`}>
+                {member.role}
+              </span>
+              <Button variant="ghost" size="sm">
+                Edit
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -540,47 +590,11 @@ const Settings = () => {
                   Manage team members who can access your Proof-It dashboard.
                 </p>
                 
-                <div className="border rounded-lg divide-y">
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="bg-blue-100 rounded-full p-2 text-blue-600">
-                        <User className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Demo Admin</p>
-                        <p className="text-sm text-gray-500">demo@proof-it.com</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="bg-green-100 text-green-800 text-xs px-2.5 py-0.5 rounded-full mr-2">
-                        Admin
-                      </span>
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
-                    </div>
-                  </div>
-                  
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="bg-gray-100 rounded-full p-2 text-gray-600">
-                        <User className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-medium">Support Agent</p>
-                        <p className="text-sm text-gray-500">agent@proof-it.com</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="bg-blue-100 text-blue-800 text-xs px-2.5 py-0.5 rounded-full mr-2">
-                        Support
-                      </span>
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
-                    </div>
-                  </div>
-                </div>
+                {loading ? (
+                  <div className="text-center py-4">Loading team members...</div>
+                ) : (
+                  renderTeamMembers()
+                )}
               </div>
             </CardContent>
           </Card>

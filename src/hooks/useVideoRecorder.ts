@@ -5,6 +5,7 @@ import { toast } from "sonner";
 export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoRef: React.RefObject<HTMLVideoElement>) => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -18,6 +19,7 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
     }
     
     setRecordingTime(0);
+    setIsRecording(true);
     
     if (videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
@@ -52,6 +54,7 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
       };
       
       mediaRecorder.onstop = () => {
+        setIsRecording(false);
         const blob = new Blob(chunksRef.current, { type: 'video/webm' });
         const videoURL = URL.createObjectURL(blob);
         setRecordedVideo(videoURL);
@@ -90,6 +93,8 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
       mediaRecorderRef.current.stop();
       console.log("Recording stopped");
     }
+    
+    setIsRecording(false);
   };
 
   const retakeVideo = () => {
@@ -103,6 +108,7 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
   return {
     recordingTime,
     recordedVideo,
+    isRecording,
     MAX_RECORDING_TIME,
     startRecording,
     stopRecording,

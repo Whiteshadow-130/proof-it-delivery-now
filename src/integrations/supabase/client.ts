@@ -16,3 +16,56 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     autoRefreshToken: true,
   }
 });
+
+/**
+ * Ensures that the authenticated user exists in the users table.
+ * This function should be called after authentication.
+ */
+export const ensureUserExists = async () => {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      console.error('No authenticated user found');
+      return null;
+    }
+    
+    // Check if user exists in the users table
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .maybeSingle();
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking if user exists:', checkError);
+      return null;
+    }
+    
+    // If user doesn't exist, create them
+    if (!existingUser) {
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert([{
+          id: user.id,
+          email: user.email || '',
+          full_name: user.user_metadata?.full_name || null,
+          avatar_url: user.user_metadata?.avatar_url || null
+        }])
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Error creating user record:', insertError);
+        return null;
+      }
+      
+      return newUser;
+    }
+    
+    return existingUser;
+  } catch (error) {
+    console.error('Error in ensureUserExists:', error);
+    return null;
+  }
+};

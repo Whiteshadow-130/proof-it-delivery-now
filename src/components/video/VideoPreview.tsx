@@ -63,6 +63,7 @@ const VideoPreview = ({
           muted={step === "recording"}
           playsInline
           autoPlay={step === "recording"}
+          controls={step === "preview"}
           className="w-full h-full object-cover"
           style={{ transform: "scaleX(1)" }}
         />
