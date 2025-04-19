@@ -1,4 +1,3 @@
-
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase, ensureUserExists } from '@/integrations/supabase/client';
@@ -25,7 +24,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const location = useLocation();
 
   useEffect(() => {
-    // First set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, currentSession) => {
         console.log('Auth state changed:', event);
@@ -33,8 +31,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(currentSession?.user ?? null);
         
         if (event === 'SIGNED_IN') {
-          // Ensure user exists in users table after sign in
-          // Using setTimeout to prevent deadlocks with Supabase auth
           setTimeout(async () => {
             const userData = await ensureUserExists();
             if (!userData) {
@@ -47,13 +43,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
           }, 0);
         } else if (event === 'SIGNED_OUT') {
-          // Redirect to login page on sign out
           navigate('/login');
         }
       }
     );
 
-    // Then get the initial session
     const initializeAuth = async () => {
       try {
         const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -62,7 +56,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(currentSession?.user ?? null);
         
         if (currentSession?.user) {
-          // Ensure user exists in users table
           const userData = await ensureUserExists();
           
           if (!userData) {
@@ -85,7 +78,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [navigate]);
 
-  // Sign in with email and password
   const signIn = async (email: string, password: string) => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -97,11 +89,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       
       toast.success('Login successful');
       
-      // Get the redirect path from location state or default to dashboard
       const origin = location.state?.from?.pathname || '/dashboard';
       navigate(origin);
       
-      // Ensure user data exists in our database
       const userData = await ensureUserExists();
       
       if (!userData) {
@@ -117,10 +107,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Sign up with email and password
   const signUp = async (email: string, password: string, fullName: string, companyName: string) => {
     try {
-      // Step 1: Sign up the user in Supabase Auth
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -134,58 +122,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (error) throw error;
       
-      // Step 2: Get the newly created user
-      const { data: { user: newUser } } = await supabase.auth.getUser();
-      
-      if (newUser) {
-        try {
-          // Step 3: Create a company
-          console.log("Creating company for new user:", companyName);
-          const { data: company, error: companyError } = await supabase
-            .from('companies')
-            .insert({
-              name: companyName,
-            })
-            .select()
-            .single();
-          
-          if (companyError) {
-            console.error('Error creating company:', companyError);
-            throw companyError;
-          }
-          
-          if (!company) {
-            throw new Error("Company was not created");
-          }
-          
-          const companyId = company.id;
-          console.log("Company created successfully with ID:", companyId);
-          
-          // Step 4: Create user record
-          console.log("Creating user record:", { id: newUser.id, email, full_name: fullName, company_id: companyId });
-          const { error: userError } = await supabase
-            .from('users')
-            .insert({
-              id: newUser.id,
-              email: email,
-              full_name: fullName,
-              company_id: companyId
-            });
-          
-          if (userError) {
-            console.error('Error creating user record:', userError);
-            throw userError;
-          }
-          
-          console.log("User record created successfully");
-        } catch (err) {
-          console.error("Error during registration db setup:", err);
-          throw err;
-        }
-      }
-      
       toast.success('Account created successfully', {
-        description: 'You can now log in with your credentials',
+        description: 'Please check your email for verification and then log in',
       });
       
       navigate('/login');
@@ -198,7 +136,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Sign out
   const signOut = async () => {
     try {
       const { error } = await supabase.auth.signOut();

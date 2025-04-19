@@ -36,9 +36,9 @@ export const ensureUserExists = async () => {
     // Check if user exists in the users table
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
-      .select('*')
+      .select('*, companies(name, website, phone, address, logo_url)')
       .eq('id', user.id)
-      .maybeSingle(); // Use maybeSingle instead of single to prevent errors if no row is found
+      .maybeSingle(); 
     
     if (checkError) {
       console.error('Error checking if user exists:', checkError);
@@ -68,6 +68,7 @@ export const ensureUserExists = async () => {
       }
       
       companyId = company?.id;
+      console.log('Created company successfully with ID:', companyId);
       
       const { data: newUser, error: insertError } = await supabase
         .from('users')
@@ -78,7 +79,7 @@ export const ensureUserExists = async () => {
           avatar_url: user.user_metadata?.avatar_url || null,
           company_id: companyId
         }])
-        .select()
+        .select('*, companies(name, website, phone, address, logo_url)')
         .single();
       
       if (insertError) {

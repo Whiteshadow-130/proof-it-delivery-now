@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,7 +73,7 @@ const Settings = () => {
         
         console.log("Fetching settings for user:", user.id);
         
-        // First ensure the user exists in our database
+        // First ensure the user exists in our database with properly linked company
         const userData = await ensureUserExists();
         
         if (!userData) {
@@ -85,58 +84,20 @@ const Settings = () => {
         }
         
         console.log("User data from database:", userData);
+        
+        // The user data should now include the company data
+        const companyData = userData.companies;
         setCompanyId(userData.company_id || null);
         
-        // If the user has no company_id, create a company for them
-        if (!userData.company_id) {
-          console.log("User has no company, creating one");
-          const defaultCompanyName = user.user_metadata?.company_name || "My Company";
-          
-          const { data: newCompany, error: companyError } = await supabase
-            .from('companies')
-            .insert([{
-              name: defaultCompanyName,
-            }])
-            .select()
-            .single();
-          
-          if (companyError) {
-            console.error("Error creating company:", companyError);
-          } else if (newCompany) {
-            // Update the user with the new company_id
-            const { error: updateError } = await supabase
-              .from('users')
-              .update({ company_id: newCompany.id })
-              .eq('id', user.id);
-            
-            if (updateError) {
-              console.error("Error updating user with company_id:", updateError);
-            } else {
-              console.log("Created and assigned new company:", newCompany);
-              setCompanyId(newCompany.id);
-            }
-          }
-        }
-        
-        // Now fetch the company data if available
-        let companyData = null;
-        if (userData.company_id) {
-          const { data: company, error: companyError } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', userData.company_id)
-            .maybeSingle();
-            
-          if (companyError) {
-            console.error("Error fetching company:", companyError);
-          } else {
-            companyData = company;
-            console.log("Fetched company data:", companyData);
-          }
-          
-          // Fetch team members if company_id exists
-          fetchTeamMembers(userData.company_id);
-        }
+        // Set up the company settings form with data we got from the join
+        const userCompanySettings = {
+          companyName: companyData?.name || "",
+          email: userData?.email || "",
+          phone: companyData?.phone || "",
+          website: companyData?.website || "",
+          address: companyData?.address || "",
+          logoUrl: companyData?.logo_url || "",
+        };
         
         // Fetch notification settings
         const { data: settings, error } = await supabase
@@ -154,16 +115,6 @@ const Settings = () => {
           console.log("Fetched notification settings:", settings);
         }
         
-        // Set up the company settings form
-        const userCompanySettings = {
-          companyName: companyData?.name || "",
-          email: userData?.email || "",
-          phone: companyData?.phone || "",
-          website: companyData?.website || "",
-          address: companyData?.address || "",
-          logoUrl: companyData?.logo_url || "",
-        };
-        
         // Set up the notification settings
         const userNotificationSettings = {
           emailNotifications: settings?.notification_email ?? true,
@@ -175,6 +126,11 @@ const Settings = () => {
         
         setCompanySettings(userCompanySettings);
         setNotifications(userNotificationSettings);
+        
+        // Fetch team members if company_id exists
+        if (userData.company_id) {
+          fetchTeamMembers(userData.company_id);
+        }
       } catch (error) {
         console.error("Error fetching user settings:", error);
         toast.error("Failed to load your settings", {
@@ -251,66 +207,24 @@ const Settings = () => {
         return;
       }
       
-      let currentCompanyId = companyId;
+      // Now update the company with our settings
+      const { error: updateCompanyError } = await supabase
+        .from('companies')
+        .update({
+          name: companySettings.companyName,
+          website: companySettings.website,
+          phone: companySettings.phone,
+          address: companySettings.address,
+          logo_url: companySettings.logoUrl
+        })
+        .eq('id', userData.company_id);
       
-      if (!currentCompanyId) {
-        // Create a new company if one doesn't exist
-        const { data: newCompany, error: createError } = await supabase
-          .from('companies')
-          .insert([{
-            name: companySettings.companyName,
-            website: companySettings.website,
-            phone: companySettings.phone,
-            address: companySettings.address,
-            logo_url: companySettings.logoUrl
-          }])
-          .select()
-          .single();
-        
-        if (createError) {
-          console.error("Error creating company:", createError);
-          toast.error("Failed to create company", {
-            description: createError.message,
-          });
-          return;
-        }
-        
-        currentCompanyId = newCompany.id;
-        setCompanyId(currentCompanyId);
-        
-        // Update the user with the new company_id
-        const { error: updateUserError } = await supabase
-          .from('users')
-          .update({ company_id: currentCompanyId })
-          .eq('id', user.id);
-        
-        if (updateUserError) {
-          console.error("Error updating user with company_id:", updateUserError);
-          toast.error("Failed to associate company with your account", {
-            description: updateUserError.message,
-          });
-          return;
-        }
-      } else {
-        // Update existing company
-        const { error: updateCompanyError } = await supabase
-          .from('companies')
-          .update({
-            name: companySettings.companyName,
-            website: companySettings.website,
-            phone: companySettings.phone,
-            address: companySettings.address,
-            logo_url: companySettings.logoUrl
-          })
-          .eq('id', currentCompanyId);
-        
-        if (updateCompanyError) {
-          console.error("Error updating company:", updateCompanyError);
-          toast.error("Failed to update company settings", {
-            description: updateCompanyError.message,
-          });
-          return;
-        }
+      if (updateCompanyError) {
+        console.error("Error updating company:", updateCompanyError);
+        toast.error("Failed to update company settings", {
+          description: updateCompanyError.message,
+        });
+        return;
       }
       
       toast.success("Company settings saved successfully", {

@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,8 +24,10 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { supabase, ensureUserExists } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 
-// Mock transaction data
+// This is just a mockup for now - in real implementation you would fetch from database
 const mockTransactions = [
   {
     id: "TX-1234",
@@ -65,25 +67,92 @@ const mockTransactions = [
 ];
 
 const Wallet = () => {
+  const { user } = useAuth();
   const [addMoneyDialog, setAddMoneyDialog] = useState(false);
   const [amount, setAmount] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [balance, setBalance] = useState("0");
+  const [transactions, setTransactions] = useState(mockTransactions);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const fetchWalletData = async () => {
+      if (!user) return;
+      
+      setLoading(true);
+      try {
+        // Ensure user exists in database
+        const userData = await ensureUserExists();
+        
+        if (!userData) {
+          toast({
+            title: "Authentication error",
+            description: "Could not verify your account. Please log in again.",
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        // Here you would actually fetch wallet balance and transactions
+        // For now, we'll just use mock data
+        setBalance("1,485.00");
+        setTransactions(mockTransactions);
+      } catch (error) {
+        console.error("Error fetching wallet data:", error);
+        toast({
+          title: "Error loading wallet data",
+          description: "Please try refreshing the page",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchWalletData();
+  }, [user, toast]);
 
   const handleAddMoney = async () => {
     setProcessing(true);
     
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    toast({
-      title: "Payment successful",
-      description: `₹${amount} has been added to your wallet.`,
-    });
-    
-    setProcessing(false);
-    setAddMoneyDialog(false);
-    setAmount("");
+    try {
+      // Ensure user exists in database
+      const userData = await ensureUserExists();
+      
+      if (!userData) {
+        toast({
+          title: "Authentication error",
+          description: "Could not verify your account. Please log in again.",
+          variant: "destructive"
+        });
+        setProcessing(false);
+        return;
+      }
+      
+      // Simulate payment processing
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      
+      // Here you would save the transaction to the database
+      // For now we just update the UI
+      
+      toast({
+        title: "Payment successful",
+        description: `₹${amount} has been added to your wallet.`,
+      });
+      
+      setAddMoneyDialog(false);
+      setAmount("");
+    } catch (error) {
+      console.error("Error adding money:", error);
+      toast({
+        title: "Payment failed",
+        description: "Please try again or use a different payment method",
+        variant: "destructive"
+      });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   return (

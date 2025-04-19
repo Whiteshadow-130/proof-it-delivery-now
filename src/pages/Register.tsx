@@ -49,7 +49,8 @@ const Register = () => {
         formData.companyName
       );
       toast.success("Registration successful");
-      navigate("/login");
+      toast.info("Please check your email for verification instructions");
+      navigate('/login');
     } catch (error: any) {
       console.error("Registration error:", error);
       toast.error("Registration failed", {
