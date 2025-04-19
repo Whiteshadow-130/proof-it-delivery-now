@@ -24,47 +24,8 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { supabase, ensureUserExists } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
-
-// This is just a mockup for now - in real implementation you would fetch from database
-const mockTransactions = [
-  {
-    id: "TX-1234",
-    date: "2025-04-15",
-    type: "Credit",
-    description: "Wallet top-up",
-    amount: "₹500.00",
-  },
-  {
-    id: "TX-1233",
-    date: "2025-04-14",
-    type: "Debit",
-    description: "Video upload - Order #ORD-12345",
-    amount: "-₹5.00",
-  },
-  {
-    id: "TX-1232",
-    date: "2025-04-14",
-    type: "Debit",
-    description: "Video upload - Order #ORD-12346",
-    amount: "-₹5.00",
-  },
-  {
-    id: "TX-1231",
-    date: "2025-04-13",
-    type: "Debit",
-    description: "Video upload - Order #ORD-12347",
-    amount: "-₹5.00",
-  },
-  {
-    id: "TX-1230",
-    date: "2025-04-10",
-    type: "Credit",
-    description: "Wallet top-up",
-    amount: "₹1000.00",
-  },
-];
 
 const Wallet = () => {
   const { user } = useAuth();
@@ -73,7 +34,10 @@ const Wallet = () => {
   const [processing, setProcessing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState("0");
-  const [transactions, setTransactions] = useState(mockTransactions);
+  const [videosRemaining, setVideosRemaining] = useState(0);
+  const [usagePercentage, setUsagePercentage] = useState(0);
+  const [usageText, setUsageText] = useState("0 / 0 videos");
+  const [transactions, setTransactions] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -82,22 +46,101 @@ const Wallet = () => {
       
       setLoading(true);
       try {
-        // Ensure user exists in database
-        const userData = await ensureUserExists();
+        // Fetch user data with company information
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*, companies(id, name)')
+          .eq('id', user.id)
+          .single();
         
-        if (!userData) {
+        if (userError) {
+          console.error("Error fetching user data:", userError);
           toast({
-            title: "Authentication error",
-            description: "Could not verify your account. Please log in again.",
+            title: "Error loading user data",
+            description: "Please refresh the page",
             variant: "destructive"
           });
           return;
         }
+
+        const companyId = userData?.company_id;
+        if (!companyId) {
+          console.error("No company ID found for user");
+          return;
+        }
+
+        // Fetch wallet balance from transactions (sum credits - debits)
+        const { data: transactionsData, error: transactionsError } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false });
         
-        // Here you would actually fetch wallet balance and transactions
-        // For now, we'll just use mock data
-        setBalance("1,485.00");
-        setTransactions(mockTransactions);
+        if (transactionsError) {
+          console.error("Error fetching transactions:", transactionsError);
+          return;
+        }
+
+        // Calculate balance from transactions
+        let calculatedBalance = 0;
+        const formattedTransactions = transactionsData?.map(tx => {
+          // Assuming credits are positive and debits are negative
+          const amount = tx.type === 'Credit' ? tx.amount : -tx.amount;
+          calculatedBalance += Number(amount);
+          
+          return {
+            id: tx.id,
+            date: new Date(tx.created_at).toISOString().split('T')[0],
+            type: tx.type,
+            description: tx.description || 'Transaction',
+            amount: tx.type === 'Credit' ? `₹${tx.amount.toFixed(2)}` : `-₹${tx.amount.toFixed(2)}`
+          };
+        }) || [];
+
+        // If no real transactions exist, create some sample ones for new users
+        if (formattedTransactions.length === 0) {
+          // Create an initial credit transaction for new users
+          const { data: newTx, error: newTxError } = await supabase
+            .from('transactions')
+            .insert([{
+              company_id: companyId,
+              user_id: user.id,
+              type: 'Credit',
+              amount: 1000,
+              description: 'Initial wallet balance',
+              status: 'completed'
+            }])
+            .select();
+            
+          if (newTxError) {
+            console.error("Error creating initial transaction:", newTxError);
+          } else if (newTx) {
+            formattedTransactions.push({
+              id: newTx[0].id,
+              date: new Date(newTx[0].created_at).toISOString().split('T')[0],
+              type: 'Credit',
+              description: 'Initial wallet balance',
+              amount: `₹${newTx[0].amount.toFixed(2)}`
+            });
+            calculatedBalance = 1000;
+          }
+        }
+        
+        // Set calculated data
+        setBalance(calculatedBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
+        setTransactions(formattedTransactions);
+        
+        // Calculate videos remaining (assuming ₹5 per video)
+        const remainingVideos = Math.floor(calculatedBalance / 5);
+        setVideosRemaining(remainingVideos);
+        
+        // Set usage data (mock for now, could be based on real usage data)
+        const monthlyTarget = 300; // Example monthly target
+        const usedCount = 89; // Example used count, could fetch from actual usage data
+        const percentage = Math.round((usedCount / monthlyTarget) * 100);
+        
+        setUsagePercentage(percentage);
+        setUsageText(`${usedCount} / ${monthlyTarget} videos`);
       } catch (error) {
         console.error("Error fetching wallet data:", error);
         toast({
@@ -117,29 +160,81 @@ const Wallet = () => {
     setProcessing(true);
     
     try {
-      // Ensure user exists in database
-      const userData = await ensureUserExists();
-      
-      if (!userData) {
+      if (!user) {
         toast({
           title: "Authentication error",
-          description: "Could not verify your account. Please log in again.",
+          description: "You must be logged in to add money",
           variant: "destructive"
         });
-        setProcessing(false);
+        return;
+      }
+      
+      // Get user's company_id
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single();
+      
+      if (userError || !userData?.company_id) {
+        console.error("Error getting company ID:", userError);
+        toast({
+          title: "Transaction failed",
+          description: "Could not identify your account",
+          variant: "destructive"
+        });
         return;
       }
       
       // Simulate payment processing
       await new Promise((resolve) => setTimeout(resolve, 2000));
       
-      // Here you would save the transaction to the database
-      // For now we just update the UI
+      // Create transaction record
+      const amountNum = parseFloat(amount);
+      const { error: txError } = await supabase
+        .from('transactions')
+        .insert([{
+          company_id: userData.company_id,
+          user_id: user.id,
+          type: 'Credit',
+          amount: amountNum,
+          description: 'Wallet top-up',
+          status: 'completed'
+        }]);
+      
+      if (txError) {
+        console.error("Error recording transaction:", txError);
+        toast({
+          title: "Transaction recording failed",
+          description: "The payment was processed but we couldn't record it",
+          variant: "destructive"
+        });
+        return;
+      }
       
       toast({
         title: "Payment successful",
         description: `₹${amount} has been added to your wallet.`,
       });
+      
+      // Refresh wallet data
+      const newBalance = parseFloat(balance.replace(/,/g, '')) + amountNum;
+      setBalance(newBalance.toLocaleString('en-IN', { maximumFractionDigits: 2 }));
+      
+      // Add new transaction to the list
+      const newTx = {
+        id: `TX-${Date.now()}`,
+        date: new Date().toISOString().split('T')[0],
+        type: 'Credit',
+        description: 'Wallet top-up',
+        amount: `₹${amountNum.toFixed(2)}`
+      };
+      
+      setTransactions([newTx, ...transactions]);
+      
+      // Update videos remaining
+      const newRemaining = Math.floor(newBalance / 5);
+      setVideosRemaining(newRemaining);
       
       setAddMoneyDialog(false);
       setAmount("");
@@ -171,7 +266,7 @@ const Wallet = () => {
             <WalletIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">₹1,485.00</div>
+            <div className="text-3xl font-bold">₹{balance}</div>
             <p className="text-xs text-muted-foreground mt-1">
               Available for video uploads
             </p>
@@ -184,7 +279,7 @@ const Wallet = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">297</div>
+            <div className="text-3xl font-bold">{videosRemaining}</div>
             <p className="text-xs text-muted-foreground mt-1">
               At ₹5 per video upload
             </p>
@@ -198,10 +293,10 @@ const Wallet = () => {
           <CardContent>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <p className="text-sm">89 / 300 videos</p>
-                <p className="text-sm font-medium">30%</p>
+                <p className="text-sm">{usageText}</p>
+                <p className="text-sm font-medium">{usagePercentage}%</p>
               </div>
-              <Progress value={30} className="h-2" />
+              <Progress value={usagePercentage} className="h-2" />
               <p className="text-xs text-muted-foreground">This month's usage</p>
             </div>
           </CardContent>
@@ -220,30 +315,36 @@ const Wallet = () => {
               <CardTitle>Recent Transactions</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">Transaction ID</th>
-                      <th className="text-left py-3 px-4 font-medium">Date</th>
-                      <th className="text-left py-3 px-4 font-medium">Description</th>
-                      <th className="text-right py-3 px-4 font-medium">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mockTransactions.map((transaction) => (
-                      <tr key={transaction.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4 text-sm">{transaction.id}</td>
-                        <td className="py-3 px-4 text-sm">{transaction.date}</td>
-                        <td className="py-3 px-4 text-sm">{transaction.description}</td>
-                        <td className={`py-3 px-4 text-sm text-right ${transaction.type === "Credit" ? "text-green-600" : "text-gray-600"}`}>
-                          {transaction.amount}
-                        </td>
+              {loading ? (
+                <div className="text-center py-8">Loading transactions...</div>
+              ) : transactions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No transactions found</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-3 px-4 font-medium">Transaction ID</th>
+                        <th className="text-left py-3 px-4 font-medium">Date</th>
+                        <th className="text-left py-3 px-4 font-medium">Description</th>
+                        <th className="text-right py-3 px-4 font-medium">Amount</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {transactions.map((transaction) => (
+                        <tr key={transaction.id} className="border-b hover:bg-gray-50">
+                          <td className="py-3 px-4 text-sm">{transaction.id}</td>
+                          <td className="py-3 px-4 text-sm">{transaction.date}</td>
+                          <td className="py-3 px-4 text-sm">{transaction.description}</td>
+                          <td className={`py-3 px-4 text-sm text-right ${transaction.type === "Credit" ? "text-green-600" : "text-gray-600"}`}>
+                            {transaction.amount}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

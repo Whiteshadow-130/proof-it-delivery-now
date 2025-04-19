@@ -1,5 +1,5 @@
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,9 @@ import {
   User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/components/ui/use-toast";
+import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -25,15 +27,56 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { signOut, user } = useAuth();
+  const [companyName, setCompanyName] = useState("Loading...");
+  const [userEmail, setUserEmail] = useState("Loading...");
+  const [loading, setLoading] = useState(true);
 
-  const handleLogout = () => {
-    // Mock logout - would connect to auth in a real implementation
-    toast({
-      title: "Logged out",
-      description: "You have been logged out successfully",
-    });
-    navigate("/");
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('users')
+          .select('*, companies(name)')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error("Error fetching user data:", error);
+          return;
+        }
+
+        if (data) {
+          setCompanyName(data.companies?.name || 'My Company');
+          setUserEmail(data.email || user.email || '');
+        }
+      } catch (error) {
+        console.error("Error in fetchUserData:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [user]);
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Logged out",
+        description: "You have been logged out successfully",
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast({
+        title: "Logout failed",
+        description: "There was an issue logging you out",
+        variant: "destructive",
+      });
+    }
   };
 
   const sidebarItems = [
@@ -92,8 +135,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
                 <User className="h-5 w-5" />
               </div>
               <div>
-                <p className="font-medium">Demo Company</p>
-                <p className="text-sm text-gray-500">demo@proof-it.com</p>
+                <p className="font-medium">{companyName}</p>
+                <p className="text-sm text-gray-500">{userEmail}</p>
               </div>
             </div>
             {sidebarItems.map((item) => (
@@ -135,8 +178,8 @@ const DashboardLayout = ({ children }: DashboardLayoutProps) => {
               <User className="h-5 w-5" />
             </div>
             <div>
-              <p className="font-medium">Demo Company</p>
-              <p className="text-sm text-gray-500">demo@proof-it.com</p>
+              <p className="font-medium">{companyName}</p>
+              <p className="text-sm text-gray-500">{userEmail}</p>
             </div>
           </div>
           <div className="space-y-1">

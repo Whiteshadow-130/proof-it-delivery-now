@@ -1,6 +1,7 @@
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase, ensureUserExists } from '@/integrations/supabase/client';
+import { supabase, ensureUserExists, createCompany, createUser } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import { Session, User } from '@supabase/supabase-js';
 

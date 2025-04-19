@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { User, Mail, Building, Globe, Bell, Shield, UserPlus, CreditCard } from "lucide-react";
-import { supabase, ensureUserExists } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 
 interface CompanySettings {
@@ -74,11 +74,16 @@ const Settings = () => {
         console.log("Fetching settings for user:", user.id);
         
         // First ensure the user exists in our database with properly linked company
-        const userData = await ensureUserExists();
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*, companies(name, website, phone, address, logo_url)')
+          .eq('id', user.id)
+          .single();
         
-        if (!userData) {
-          toast.error("Could not verify your account", {
-            description: "Please log in again",
+        if (userError) {
+          console.error("Error fetching user data:", userError);
+          toast.error("Could not load your profile", {
+            description: userError.message,
           });
           return;
         }
@@ -131,6 +136,11 @@ const Settings = () => {
         if (userData.company_id) {
           fetchTeamMembers(userData.company_id);
         }
+        
+        // Fetch subscription data from transactions table
+        if (userData.company_id) {
+          fetchSubscriptionData(userData.company_id);
+        }
       } catch (error) {
         console.error("Error fetching user settings:", error);
         toast.error("Failed to load your settings", {
@@ -149,8 +159,8 @@ const Settings = () => {
   const fetchTeamMembers = async (companyId: string) => {
     try {
       const { data, error } = await supabase
-        .from('team_members')
-        .select('*')
+        .from('users')
+        .select('id, full_name, email, created_at')
         .eq('company_id', companyId);
         
       if (error) {
@@ -163,8 +173,8 @@ const Settings = () => {
           id: member.id,
           fullName: member.full_name || 'No name',
           email: member.email,
-          role: member.role,
-          status: member.status
+          role: member.id === user?.id ? 'admin' : 'member',
+          status: 'active'
         }));
         
         setTeamMembers(formattedTeamMembers);
@@ -172,6 +182,49 @@ const Settings = () => {
       }
     } catch (error) {
       console.error("Error in fetchTeamMembers:", error);
+    }
+  };
+
+  const fetchSubscriptionData = async (companyId: string) => {
+    try {
+      // This would typically fetch from a subscriptions table
+      // For now, we'll use a mock subscription based on transactions
+      
+      const { data: transactions, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('company_id', companyId)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("Error fetching transactions:", error);
+        return;
+      }
+      
+      // Calculate total balance from transactions
+      let balance = 0;
+      if (transactions) {
+        for (const tx of transactions) {
+          if (tx.type === 'Credit') {
+            balance += Number(tx.amount);
+          } else {
+            balance -= Number(tx.amount);
+          }
+        }
+      }
+      
+      // Determine plan type based on balance
+      let planType = 'Basic';
+      if (balance >= 2000) {
+        planType = 'Enterprise';
+      } else if (balance >= 1000) {
+        planType = 'Pro';
+      }
+      
+      // In a real app, you'd get this from a subscriptions table
+      console.log(`Determined plan type: ${planType} based on balance: ${balance}`);
+    } catch (error) {
+      console.error("Error fetching subscription data:", error);
     }
   };
 
@@ -595,43 +648,49 @@ const Settings = () => {
               <CardTitle>Billing Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-start space-x-4">
-                  <div className="bg-green-100 rounded-full p-2 text-green-600">
-                    <Shield className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Current Plan: Pro</p>
-                    <p className="text-sm text-gray-500">500 video uploads per month</p>
-                    <p className="text-sm text-gray-500 mt-1">Next billing date: May 16, 2025</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="space-y-4">
-                <h3 className="font-medium flex items-center">
-                  <CreditCard className="h-4 w-4 mr-2 text-gray-500" /> Payment Method
-                </h3>
-                
-                <div className="border rounded-lg p-4 flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="bg-blue-100 rounded-full p-2 text-blue-600">
-                      <CreditCard className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="font-medium">Credit Card</p>
-                      <p className="text-sm text-gray-500">Ending in 4242</p>
+              {loading ? (
+                <div className="text-center py-4">Loading billing information...</div>
+              ) : (
+                <>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <div className="flex items-start space-x-4">
+                      <div className="bg-green-100 rounded-full p-2 text-green-600">
+                        <Shield className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-medium">Current Plan: Pro</p>
+                        <p className="text-sm text-gray-500">500 video uploads per month</p>
+                        <p className="text-sm text-gray-500 mt-1">Next billing date: {new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</p>
+                      </div>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">
-                    Change
-                  </Button>
-                </div>
-                
-                <Button variant="outline" className="w-full">
-                  View Billing History
-                </Button>
-              </div>
+                  
+                  <div className="space-y-4">
+                    <h3 className="font-medium flex items-center">
+                      <CreditCard className="h-4 w-4 mr-2 text-gray-500" /> Payment Method
+                    </h3>
+                    
+                    <div className="border rounded-lg p-4 flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="bg-blue-100 rounded-full p-2 text-blue-600">
+                          <CreditCard className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-medium">Credit Card</p>
+                          <p className="text-sm text-gray-500">Ending in 4242</p>
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm">
+                        Change
+                      </Button>
+                    </div>
+                    
+                    <Button variant="outline" className="w-full">
+                      View Billing History
+                    </Button>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
