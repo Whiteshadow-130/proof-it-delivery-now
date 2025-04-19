@@ -42,6 +42,7 @@ export const ensureUserExists = async () => {
     
     if (checkError) {
       console.error('Error checking if user exists:', checkError);
+      console.error('Error details:', JSON.stringify(checkError));
       return null;
     }
     
@@ -49,6 +50,7 @@ export const ensureUserExists = async () => {
     if (!existingUser) {
       console.log('User not found in database, creating new user record');
       
+      // Step 1: Create company
       let companyId: string | null = null;
       const companyName = user.user_metadata?.company_name || 'Default Company';
       
@@ -59,13 +61,22 @@ export const ensureUserExists = async () => {
           { company_name: companyName }
         );
         
-        if (companyError) throw companyError;
-        if (!companyData) throw new Error('No company ID returned');
+        if (companyError) {
+          console.error('Error creating company:', companyError);
+          console.error('Company error details:', JSON.stringify(companyError));
+          return null;
+        }
+        
+        if (!companyData) {
+          console.error('No company ID returned');
+          return null;
+        }
         
         companyId = companyData;
         console.log('Created company successfully with ID:', companyId);
       } catch (error) {
-        console.error('Error creating company:', error);
+        console.error('Error in company creation:', error);
+        console.error('Company creation error details:', JSON.stringify(error));
         return null;
       }
       
@@ -74,36 +85,41 @@ export const ensureUserExists = async () => {
         return null;
       }
       
-      // Now create the user record with the company ID
+      // Step 2: Create user with the company ID
       console.log('Attempting to insert user with ID:', user.id, 'and company ID:', companyId);
-      const { data: newUser, error: insertError } = await supabase
-        .from('users')
-        .insert([{
-          id: user.id,
-          email: user.email || '',
-          full_name: user.user_metadata?.full_name || null,
-          avatar_url: user.user_metadata?.avatar_url || null,
-          company_id: companyId
-        }])
-        .select('*, companies(name, website, phone, address, logo_url)')
-        .single();
       
-      if (insertError) {
-        console.error('Error creating user record:', insertError);
-        // Log more details about the error
-        console.error('Error details:', JSON.stringify(insertError));
+      try {
+        const { data: newUser, error: insertError } = await supabase
+          .from('users')
+          .insert([{
+            id: user.id,
+            email: user.email || '',
+            full_name: user.user_metadata?.full_name || null,
+            avatar_url: user.user_metadata?.avatar_url || null,
+            company_id: companyId
+          }])
+          .select('*, companies(name, website, phone, address, logo_url)')
+          .single();
+        
+        if (insertError) {
+          console.error('Error creating user record:', insertError);
+          console.error('Insert error details:', JSON.stringify(insertError));
+          return null;
+        }
+        
+        console.log('Created new user record successfully:', newUser);
+        return newUser;
+      } catch (insertCatchError) {
+        console.error('Exception during user insertion:', insertCatchError);
+        console.error('Insert catch error details:', JSON.stringify(insertCatchError));
         return null;
       }
-      
-      console.log('Created new user record successfully:', newUser);
-      return newUser;
     }
     
     console.log('Found existing user record:', existingUser);
     return existingUser;
   } catch (error) {
     console.error('Error in ensureUserExists:', error);
-    // Log more details about the error
     console.error('Error details:', JSON.stringify(error));
     return null;
   }

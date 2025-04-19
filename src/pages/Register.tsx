@@ -49,7 +49,7 @@ const Register = () => {
         formData.companyName
       );
       toast.success("Registration successful");
-      toast.info("Please check your email for verification instructions");
+      toast.info("Please check your email for verification instructions. After verifying, you'll need to log in.");
       navigate('/login');
     } catch (error: any) {
       console.error("Registration error:", error);

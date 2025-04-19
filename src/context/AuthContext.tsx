@@ -142,34 +142,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (error) throw error;
-      
-      // Attempt to immediately create the user and company records even before verification
-      if (data.user) {
-        try {
-          console.log('Creating company and user records during registration');
-          // We need to store the user data temporarily to create the company and user records
-          const tempUser = data.user;
-          
-          // This will create both company and user entries in their respective tables
-          const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
-              if (event === 'SIGNED_UP') {
-                console.log('Detected SIGNED_UP event, attempting to create database records');
-                // This is a one-time operation for this specific user
-                if (session?.user?.id === tempUser.id) {
-                  await ensureUserExists();
-                  subscription.unsubscribe();
-                }
-              }
-            }
-          );
-          
-          console.log("Registration completed, database records will be created when verified");
-        } catch (dbError) {
-          console.error("Failed to set up database record creation:", dbError);
-          // Continue with registration even if this fails - will try again at login
-        }
-      }
+
+      // Don't try to immediately create the user record here
+      // Wait for verification instead
       
       toast.success('Account created successfully', {
         description: 'Please check your email for verification and then log in',
