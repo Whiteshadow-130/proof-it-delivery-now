@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download } from "lucide-react";
@@ -21,7 +20,6 @@ interface Order {
   customer: string;
   date: string;
   status: string;
-  user_id?: string;
 }
 
 const RecentOrders = () => {
@@ -29,7 +27,6 @@ const RecentOrders = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Fetch recent orders from Supabase
   useEffect(() => {
     const fetchRecentOrders = async () => {
       try {
@@ -40,7 +37,6 @@ const RecentOrders = () => {
         
         if (!user) {
           console.error("No authenticated user found");
-          // Continue to render UI with empty state
           setLoading(false);
           return;
         }
@@ -48,26 +44,23 @@ const RecentOrders = () => {
         const { data, error } = await supabase
           .from('orders')
           .select('*')
-          .eq('user_id', user.id)  // Filter by the current user's ID
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(5);
         
         if (error) throw error;
         
-        // Transform the data to match our Order interface
         const transformedOrders = data.map(order => ({
           id: order.order_number,
           awb: order.awb,
           customer: order.customer_name,
           date: new Date(order.created_at).toISOString().split('T')[0],
-          status: order.status,
-          user_id: order.user_id
+          status: order.status
         }));
         
         setOrders(transformedOrders);
       } catch (error) {
         console.error("Error fetching recent orders:", error);
-        // Fallback to empty state if there's an error
         setOrders([]);
       } finally {
         setLoading(false);
@@ -79,14 +72,11 @@ const RecentOrders = () => {
 
   const handleViewAction = (order: Order) => {
     if (order.status === "Video Received") {
-      // In a real app, navigate to a view video page
       navigate(`/video-proof?order=${order.id}`);
       toast.success(`Viewing video for order ${order.id}`);
     } else if (order.status === "QR Generated") {
-      // Redirect to the specific QR code
       navigate(`/qr-codes?order=${order.id}`);
     } else if (order.status === "Video Pending") {
-      // Open the recording page for this specific order
       const recordUrl = `${window.location.origin}/proof?order=${order.id}`;
       window.open(recordUrl, '_blank');
     }

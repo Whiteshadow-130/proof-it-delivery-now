@@ -19,6 +19,7 @@ export type Database = {
           id: string
           order_number: string
           status: string
+          user_id: string | null
           verified: boolean
           video_uploaded: boolean
         }
@@ -31,6 +32,7 @@ export type Database = {
           id?: string
           order_number: string
           status?: string
+          user_id?: string | null
           verified?: boolean
           video_uploaded?: boolean
         }
@@ -43,6 +45,7 @@ export type Database = {
           id?: string
           order_number?: string
           status?: string
+          user_id?: string | null
           verified?: boolean
           video_uploaded?: boolean
         }
