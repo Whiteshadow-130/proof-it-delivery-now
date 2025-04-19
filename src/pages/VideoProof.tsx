@@ -4,8 +4,9 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Download, ArrowLeft } from "lucide-react";
-import { toast } from "@/components/ui/use-toast";
+import { toast } from "sonner";
 import DashboardLayout from "@/components/DashboardLayout";
+import { supabase } from "@/integrations/supabase/client";
 
 const VideoProof = () => {
   const [loading, setLoading] = useState(true);
@@ -23,67 +24,74 @@ const VideoProof = () => {
   const orderId = params.get("order");
   
   useEffect(() => {
-    // Simulate loading video data from backend
     const fetchVideoData = async () => {
+      if (!orderId) {
+        toast.error("No order ID specified");
+        navigate("/dashboard");
+        return;
+      }
+
       try {
         setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 800)); // Simulated loading delay
         
-        // Check if video was uploaded (using local storage in this simulation)
-        const videoUploaded = localStorage.getItem(`video_uploaded_${orderId}`) === "true";
+        // Fetch order data from Supabase
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*')
+          .eq('order_number', orderId)
+          .single();
         
-        // In a real app, you would fetch this from your backend
-        if (videoUploaded) {
+        if (error) {
+          console.error("Error fetching order data:", error);
+          toast.error("Failed to load order data");
+          setLoading(false);
+          return;
+        }
+        
+        console.log("Fetched order data:", data);
+        
+        if (data.video_uploaded && data.video_url) {
           setVideoData({
-            orderId: orderId || "Unknown",
-            videoId: `VID-${Math.floor(10000 + Math.random() * 90000)}`,
-            videoUrl: "https://www.w3schools.com/html/mov_bbb.mp4", // Example video URL
-            uploadDate: new Date().toISOString().split('T')[0],
+            orderId: data.order_number,
+            videoId: `VID-${data.id.substring(0, 8)}`,
+            videoUrl: data.video_url,
+            uploadDate: new Date(data.created_at).toISOString().split('T')[0],
             status: "Completed"
           });
         } else {
           setVideoData({
-            orderId: orderId || "Unknown",
+            orderId: data.order_number,
             videoId: "Not available",
             videoUrl: null,
-            uploadDate: "N/A",
+            uploadDate: new Date(data.created_at).toISOString().split('T')[0],
             status: "Pending"
           });
         }
       } catch (error) {
         console.error("Error fetching video data:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load video data. Please try again.",
-          variant: "destructive"
-        });
+        toast.error("Failed to load video data. Please try again.");
       } finally {
         setLoading(false);
       }
     };
     
-    if (orderId) {
-      fetchVideoData();
-    } else {
-      toast({
-        title: "Error",
-        description: "No order ID specified",
-        variant: "destructive"
-      });
-      navigate("/dashboard");
-    }
+    fetchVideoData();
   }, [orderId, navigate]);
   
   const handleRequestVideo = () => {
     // In a real app, this would send a notification to the customer
-    toast({
-      title: "Request sent",
-      description: "Video request notification sent to customer"
-    });
+    toast.success("Video request notification sent to customer");
   };
   
   const handleBackToDashboard = () => {
     navigate("/dashboard");
+  };
+
+  const handleDownloadVideo = () => {
+    if (videoData?.videoUrl) {
+      window.open(videoData.videoUrl, '_blank');
+      toast.success("Downloading video...");
+    }
   };
 
   return (
@@ -160,10 +168,12 @@ const VideoProof = () => {
                       controls 
                       className="w-full h-full"
                       poster="/placeholder.svg"
-                    />
+                    >
+                      Your browser does not support the video tag.
+                    </video>
                   </div>
                   <div className="flex justify-end">
-                    <Button className="ml-auto">
+                    <Button className="ml-auto" onClick={handleDownloadVideo}>
                       <Download className="h-4 w-4 mr-2" />
                       Download Video
                     </Button>

@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, Package, ArrowRight } from "lucide-react";
-import { toast } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import OtpVerification from "@/components/verification/OtpVerification";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -51,14 +51,10 @@ const OrderDetails = () => {
       console.log("Found order data:", data);
       setOrderData(data);
 
-      // Check if order is already verified
-      if (data.verified) {
-        setVerified(true);
-        setStep("ready");
-      } else {
-        // Move to OTP step if mobile number exists, but don't send OTP automatically
-        setStep(data.customer_mobile ? "otp" : "order");
-      }
+      // For now, we'll skip OTP verification and set all orders as verified
+      // This can be replaced later with proper OTP verification
+      setVerified(true);
+      setStep("ready");
     } catch (error) {
       console.error("Error fetching order:", error);
       toast.error("Could not verify order number. Please try again.");

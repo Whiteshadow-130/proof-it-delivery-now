@@ -15,8 +15,10 @@ const VideoRecording = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoAlreadyUploaded, setVideoAlreadyUploaded] = useState(false);
   const [orderData, setOrderData] = useState<any>(null);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  
+  // For anonymous uploads
+  const tempUserId = "anonymous";
+  const tempCompanyId = "default";
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,51 +45,6 @@ const VideoRecording = () => {
     stopRecording,
     retakeVideo
   } = useVideoRecorder(streamRef, videoRef);
-
-  // Get user ID and company ID
-  useEffect(() => {
-    const getUserInfo = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (!user) {
-          console.log("No authenticated user");
-          toast.error("Please log in to record a video");
-          navigate('/login', { state: { returnUrl: location.pathname + location.search } });
-          return;
-        }
-        
-        setUserId(user.id);
-        console.log("Set user ID:", user.id);
-        
-        // Get user's company_id
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('company_id')
-          .eq('id', user.id)
-          .single();
-          
-        if (userError) {
-          console.error("Error fetching user data:", userError);
-          toast.error("Could not retrieve user information");
-          return;
-        }
-        
-        if (userData?.company_id) {
-          setCompanyId(userData.company_id);
-          console.log("Set company ID:", userData.company_id);
-        } else {
-          console.error("No company ID found for user");
-          toast.error("User account is not associated with a company");
-        }
-      } catch (error) {
-        console.error("Error fetching user info:", error);
-        toast.error("An error occurred while loading user data");
-      }
-    };
-    
-    getUserInfo();
-  }, [navigate, location]);
 
   // Check if order exists and if video already uploaded
   useEffect(() => {
@@ -190,30 +147,20 @@ const VideoRecording = () => {
   };
 
   const uploadVideo = async () => {
-    console.log("Starting upload with userData:", { userId, companyId, orderData, recordedVideo });
+    console.log("Starting upload for order:", orderNumber);
     
     if (!recordedVideo) {
       toast.error("No video recorded");
       return;
     }
     
-    if (!userId) {
-      toast.error("Missing user ID for upload");
-      return;
-    }
-    
-    if (!companyId) {
-      toast.error("Missing company ID for upload");
+    if (!orderNumber) {
+      toast.error("Missing order number for upload");
       return;
     }
     
     if (!orderData) {
       toast.error("Missing order data for upload");
-      return;
-    }
-    
-    if (!orderNumber) {
-      toast.error("Missing order number for upload");
       return;
     }
     
@@ -234,8 +181,8 @@ const VideoRecording = () => {
       const timestamp = Date.now();
       const fileName = `${timestamp}_${orderNumber}.webm`;
       
-      // Create storage path that includes user_id and company_id
-      const filePath = `companies/${companyId}/users/${userId}/orders/${orderNumber}/${fileName}`;
+      // Create storage path that includes company_id and order_number
+      const filePath = `videos/${tempCompanyId}/${orderNumber}/${fileName}`;
       
       console.log("Uploading video to path:", filePath);
       
