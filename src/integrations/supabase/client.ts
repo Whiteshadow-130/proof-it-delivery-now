@@ -24,6 +24,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
  */
 export const createCompany = async (companyName: string) => {
   try {
+    console.log('Creating company with name:', companyName);
+    
     // Using RPC call to create company with elevated privileges
     const { data: companyId, error } = await supabase.rpc(
       'create_company_for_user',
@@ -32,12 +34,15 @@ export const createCompany = async (companyName: string) => {
     
     if (error) {
       console.error('Error creating company:', error);
+      console.error('Error details:', JSON.stringify(error));
       return null;
     }
     
+    console.log('Company created successfully with ID:', companyId);
     return companyId;
   } catch (error) {
     console.error('Exception during company creation:', error);
+    console.error('Error details:', JSON.stringify(error));
     return null;
   }
 };
@@ -67,6 +72,7 @@ export const createUser = async (userId: string, email: string, fullName: string
     
     if (error) {
       console.error('Error creating user record:', error);
+      console.error('Error details:', JSON.stringify(error));
       return null;
     }
     
@@ -74,6 +80,7 @@ export const createUser = async (userId: string, email: string, fullName: string
     return userData;
   } catch (error) {
     console.error('Exception during user creation:', error);
+    console.error('Error details:', JSON.stringify(error));
     return null;
   }
 };
@@ -112,15 +119,17 @@ export const ensureUserExists = async () => {
       console.log('User not found in database, creating new user record');
       
       // Step 1: Create company
-      let companyId: string | null = null;
       const companyName = user.user_metadata?.company_name || 'Default Company';
+      console.log('Creating company with name:', companyName);
       
-      companyId = await createCompany(companyName);
+      const companyId = await createCompany(companyName);
       
       if (!companyId) {
         console.error('Failed to get company ID after creation');
         return null;
       }
+      
+      console.log('Company created with ID:', companyId);
       
       // Step 2: Create user with the company ID
       const userData = await createUser(
@@ -135,6 +144,7 @@ export const ensureUserExists = async () => {
         return null;
       }
       
+      console.log('User record created successfully:', userData);
       return userData;
     }
     

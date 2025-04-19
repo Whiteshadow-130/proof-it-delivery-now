@@ -153,17 +153,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (data?.user) {
         toast.success('Account created successfully');
         
-        // Don't wait for email verification if unnecessary
-        // Uncomment this code if user records need to be created immediately
-        /*
-        // Force creation of user record
+        // Force creation of user record immediately instead of waiting for email verification
+        console.log('Creating user record immediately after signup');
         const companyId = await createCompany(companyName);
         if (companyId) {
           await createUser(data.user.id, email, fullName, companyId);
-          navigate('/dashboard');
+          
+          // Still sign out the user to complete registration flow
+          await supabase.auth.signOut();
+          toast.info('Please check your email for verification and then log in');
+          navigate('/login');
           return;
         }
-        */
         
         // Otherwise use normal flow with email verification
         toast.info('Please check your email for verification and then log in');
