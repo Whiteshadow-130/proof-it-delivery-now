@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
@@ -34,6 +33,8 @@ const VideoRecording = () => {
   const {
     recordingTime,
     recordedVideo,
+    isRecording,
+    showUpload,
     MAX_RECORDING_TIME,
     startRecording,
     stopRecording,
@@ -164,30 +165,21 @@ const VideoRecording = () => {
     setUploadProgress(0);
     
     try {
-      // Get current user if not already fetched
-      if (!userId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          toast.error("You must be logged in to upload a video");
-          return;
-        }
-        setUserId(user.id);
+      if (!userId || !companyId || !orderData) {
+        toast.error("Missing required data for upload");
+        return;
       }
       
       // Fetch the video blob
       const response = await fetch(recordedVideo);
       const blob = await response.blob();
       
-      // Generate a unique filename
+      // Generate a unique filename with order number
       const timestamp = Date.now();
       const fileName = `${timestamp}_${orderNumber}.webm`;
       
-      // Create storage path that includes user_id and company_id for better organization
-      let filePath = `orders/${orderNumber}`;
-      if (userId) filePath = `users/${userId}/${filePath}`;
-      if (companyId) filePath = `companies/${companyId}/${filePath}`;
-      
-      const fullFilePath = `${filePath}/${fileName}`;
+      // Create storage path that includes user_id and company_id
+      const filePath = `companies/${companyId}/users/${userId}/orders/${orderNumber}/${fileName}`;
       
       let uploadProgress = 0;
       const interval = setInterval(() => {
@@ -197,16 +189,16 @@ const VideoRecording = () => {
       }, 300);
       
       // Upload to Supabase storage
-      const { error } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('videos')
-        .upload(fullFilePath, blob, {
+        .upload(filePath, blob, {
           contentType: 'video/webm',
           cacheControl: '3600',
           upsert: false,
         });
           
-      if (error) {
-        console.error("Error uploading video:", error);
+      if (uploadError) {
+        console.error("Error uploading video:", uploadError);
         toast.error("Video upload failed");
         clearInterval(interval);
         return;
@@ -215,10 +207,24 @@ const VideoRecording = () => {
       // Get the public URL of the uploaded video
       const { data: { publicUrl } } = supabase.storage
         .from('videos')
-        .getPublicUrl(fullFilePath);
+        .getPublicUrl(filePath);
       
-      // Update order status with video URL and user/company information
-      await updateVideoStatus(publicUrl);
+      // Update order with video URL and metadata
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          video_url: publicUrl,
+          video_uploaded: true,
+          status: 'Video Received'
+        })
+        .eq('order_number', orderNumber);
+
+      if (updateError) {
+        console.error("Error updating order:", updateError);
+        toast.error("Failed to update order status");
+        clearInterval(interval);
+        return;
+      }
       
       clearInterval(interval);
       setUploadProgress(100);
@@ -228,66 +234,7 @@ const VideoRecording = () => {
       }, 500);
     } catch (error) {
       console.error("Error in uploadVideo:", error);
-      toast.error("An error occurred during upload.");
-    }
-  };
-
-  const updateVideoStatus = async (videoUrl?: string) => {
-    try {
-      // Get user info if not already available
-      let currentUserId = userId;
-      let currentCompanyId = companyId;
-      
-      if (!currentUserId) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          currentUserId = user.id;
-          
-          // Get company_id if not already fetched
-          if (!currentCompanyId) {
-            const { data: userData } = await supabase
-              .from('users')
-              .select('company_id')
-              .eq('id', user.id)
-              .single();
-              
-            currentCompanyId = userData?.company_id || null;
-          }
-        }
-      }
-      
-      const updateData: any = {
-        video_uploaded: true,
-        status: 'Video Received',
-        verified: true // Auto-verify without OTP
-      };
-      
-      // Add video URL to order record if provided
-      if (videoUrl) {
-        updateData.video_url = videoUrl;
-      }
-      
-      // Add user_id and company_id if not already set on the order
-      if (currentUserId && !orderData?.user_id) {
-        updateData.user_id = currentUserId;
-      }
-      
-      if (currentCompanyId && !orderData?.company_id) {
-        updateData.company_id = currentCompanyId;
-      }
-      
-      const { error } = await supabase
-        .from('orders')
-        .update(updateData)
-        .eq('order_number', orderNumber);
-
-      if (error) throw error;
-      
-      setVideoAlreadyUploaded(true);
-      toast.success("Video uploaded successfully");
-    } catch (err) {
-      console.error("Error updating video status:", err);
-      toast.error("Failed to update video status");
+      toast.error("An error occurred during upload");
     }
   };
 
@@ -328,6 +275,7 @@ const VideoRecording = () => {
               }}
               onUpload={uploadVideo}
               onSwitchCamera={switchCamera}
+              showUpload={showUpload}
             />
           )}
         </div>

@@ -6,6 +6,7 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
   const [recordingTime, setRecordingTime] = useState(0);
   const [recordedVideo, setRecordedVideo] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -20,9 +21,11 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
     
     setRecordingTime(0);
     setIsRecording(true);
+    setShowUpload(false);
     
     if (videoRef.current) {
       videoRef.current.srcObject = streamRef.current;
+      videoRef.current.style.transform = 'scaleX(-1)'; // Mirror the video
       videoRef.current.play().catch(e => console.error("Error playing video:", e));
     }
     
@@ -58,10 +61,12 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
         const blob = new Blob(chunksRef.current, { type: 'video/webm' });
         const videoURL = URL.createObjectURL(blob);
         setRecordedVideo(videoURL);
+        setShowUpload(true);
         
         if (videoRef.current) {
           videoRef.current.srcObject = null;
           videoRef.current.src = videoURL;
+          videoRef.current.style.transform = 'scaleX(1)'; // Remove mirroring for playback
           videoRef.current.play().catch(e => console.error("Error playing video:", e));
         }
       };
@@ -103,12 +108,14 @@ export const useVideoRecorder = (streamRef: React.RefObject<MediaStream>, videoR
       setRecordedVideo(null);
     }
     setRecordingTime(0);
+    setShowUpload(false);
   };
 
   return {
     recordingTime,
     recordedVideo,
     isRecording,
+    showUpload,
     MAX_RECORDING_TIME,
     startRecording,
     stopRecording,

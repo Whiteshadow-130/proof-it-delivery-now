@@ -56,6 +56,7 @@ export type Database = {
           user_id: string | null
           verified: boolean
           video_uploaded: boolean
+          video_url: string | null
         }
         Insert: {
           awb: string
@@ -70,6 +71,7 @@ export type Database = {
           user_id?: string | null
           verified?: boolean
           video_uploaded?: boolean
+          video_url?: string | null
         }
         Update: {
           awb?: string
@@ -84,6 +86,7 @@ export type Database = {
           user_id?: string | null
           verified?: boolean
           video_uploaded?: boolean
+          video_url?: string | null
         }
         Relationships: [
           {

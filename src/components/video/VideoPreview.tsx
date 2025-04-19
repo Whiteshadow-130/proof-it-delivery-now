@@ -15,6 +15,7 @@ interface VideoPreviewProps {
   onRetake?: () => void;
   onUpload?: () => void;
   onSwitchCamera?: () => void;
+  showUpload?: boolean;
 }
 
 const VideoPreview = ({
@@ -26,7 +27,8 @@ const VideoPreview = ({
   onStopRecording,
   onRetake,
   onUpload,
-  onSwitchCamera
+  onSwitchCamera,
+  showUpload = false
 }: VideoPreviewProps) => {
   return (
     <div className="space-y-4">
@@ -65,7 +67,6 @@ const VideoPreview = ({
           autoPlay={step === "recording"}
           controls={step === "preview"}
           className="w-full h-full object-cover"
-          style={{ transform: "scaleX(1)" }}
         />
         
         {step === "recording" && (
@@ -106,7 +107,7 @@ const VideoPreview = ({
         </div>
       )}
 
-      {step === "preview" && (
+      {step === "preview" && showUpload && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Button 
