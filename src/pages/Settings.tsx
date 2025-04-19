@@ -11,8 +11,25 @@ import { toast } from "@/components/ui/sonner";
 import { User, Mail, Building, Globe, Bell, Shield, UserPlus, CreditCard } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
+interface CompanySettings {
+  companyName: string;
+  email: string;
+  phone: string;
+  website: string;
+  address: string;
+  logoUrl: string;
+}
+
+interface NotificationSettings {
+  emailNotifications: boolean;
+  orderUpdates: boolean;
+  videoUploads: boolean;
+  billingAlerts: boolean;
+  marketingEmails: boolean;
+}
+
 const Settings = () => {
-  const [companySettings, setCompanySettings] = useState({
+  const [companySettings, setCompanySettings] = useState<CompanySettings>({
     companyName: "",
     email: "",
     phone: "",
@@ -21,7 +38,7 @@ const Settings = () => {
     logoUrl: "",
   });
 
-  const [notifications, setNotifications] = useState({
+  const [notifications, setNotifications] = useState<NotificationSettings>({
     emailNotifications: true,
     orderUpdates: true,
     videoUploads: true,
