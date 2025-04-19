@@ -31,21 +31,22 @@ interface NotificationSettings {
 interface SettingsRecord {
   id: string;
   user_id: string;
+  company_id: string | null;
   created_at: string;
   updated_at: string;
   notification_email: boolean | null;
   notification_sms: boolean | null;
   theme: string | null;
-  company_name: string | null;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  address: string | null;
-  logo_url: string | null;
-  order_updates: boolean | null;
-  video_uploads: boolean | null;
-  billing_alerts: boolean | null;
-  marketing_emails: boolean | null;
+  company_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  address?: string | null;
+  logo_url?: string | null;
+  order_updates?: boolean | null;
+  video_uploads?: boolean | null;
+  billing_alerts?: boolean | null;
+  marketing_emails?: boolean | null;
 }
 
 const Settings = () => {
@@ -67,6 +68,7 @@ const Settings = () => {
   });
   
   const [loading, setLoading] = useState(true);
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchUserSettings = async () => {
@@ -81,11 +83,40 @@ const Settings = () => {
           return;
         }
         
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('company_id, email')
+          .eq('id', user.id)
+          .single();
+        
+        if (userError) {
+          console.error("Error fetching user data:", userError);
+          toast.error("Could not load your user data");
+          return;
+        }
+        
+        setCompanyId(userData?.company_id || null);
+        
+        let companyData = null;
+        if (userData?.company_id) {
+          const { data: company, error: companyError } = await supabase
+            .from('companies')
+            .select('*')
+            .eq('id', userData.company_id)
+            .single();
+            
+          if (companyError) {
+            console.error("Error fetching company:", companyError);
+          } else {
+            companyData = company;
+          }
+        }
+        
         const { data: settings, error } = await supabase
           .from('settings')
           .select('*')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
         
         if (error && error.code !== 'PGRST116') {
           console.error("Error fetching settings:", error);
@@ -93,34 +124,25 @@ const Settings = () => {
           return;
         }
         
-        if (settings) {
-          const typedSettings = settings as SettingsRecord;
-          
-          const userCompanySettings = {
-            companyName: typedSettings.company_name || "",
-            email: typedSettings.email || user.email || "",
-            phone: typedSettings.phone || "",
-            website: typedSettings.website || "",
-            address: typedSettings.address || "",
-            logoUrl: typedSettings.logo_url || "",
-          };
-          
-          const userNotificationSettings = {
-            emailNotifications: typedSettings.notification_email !== null ? typedSettings.notification_email : true,
-            orderUpdates: typedSettings.order_updates !== null ? typedSettings.order_updates : true,
-            videoUploads: typedSettings.video_uploads !== null ? typedSettings.video_uploads : true,
-            billingAlerts: typedSettings.billing_alerts !== null ? typedSettings.billing_alerts : true,
-            marketingEmails: typedSettings.marketing_emails !== null ? typedSettings.marketing_emails : false,
-          };
-          
-          setCompanySettings(userCompanySettings);
-          setNotifications(userNotificationSettings);
-        } else {
-          setCompanySettings({
-            ...companySettings,
-            email: user.email || ""
-          });
-        }
+        const userCompanySettings = {
+          companyName: companyData?.name || "",
+          email: userData?.email || user.email || "",
+          phone: companyData?.phone || "",
+          website: companyData?.website || "",
+          address: companyData?.address || "",
+          logoUrl: companyData?.logo_url || "",
+        };
+        
+        const userNotificationSettings = {
+          emailNotifications: settings?.notification_email !== null ? settings?.notification_email : true,
+          orderUpdates: settings?.order_updates !== null ? settings?.order_updates : true,
+          videoUploads: settings?.video_uploads !== null ? settings?.video_uploads : true,
+          billingAlerts: settings?.billing_alerts !== null ? settings?.billing_alerts : true,
+          marketingEmails: settings?.marketing_emails !== null ? settings?.marketing_emails : false,
+        };
+        
+        setCompanySettings(userCompanySettings);
+        setNotifications(userNotificationSettings);
       } catch (error) {
         console.error("Error fetching user settings:", error);
         toast.error("Failed to load your settings");
@@ -156,36 +178,65 @@ const Settings = () => {
         return;
       }
       
-      const settingsData = {
-        user_id: user.id,
-        company_name: companySettings.companyName,
-        email: companySettings.email,
-        phone: companySettings.phone,
-        website: companySettings.website,
-        address: companySettings.address,
-        logo_url: companySettings.logoUrl,
-      };
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('company_id')
+        .eq('id', user.id)
+        .single();
       
-      const { data: existingSettings } = await supabase
-        .from('settings')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      
-      let result;
-      
-      if (existingSettings) {
-        result = await supabase
-          .from('settings')
-          .update(settingsData)
-          .eq('user_id', user.id);
-      } else {
-        result = await supabase
-          .from('settings')
-          .insert([settingsData]);
+      if (userError) {
+        console.error("Error fetching user data:", userError);
+        toast.error("Could not verify your account");
+        return;
       }
       
-      if (result.error) throw result.error;
+      let companyId = userData?.company_id;
+      
+      if (!companyId) {
+        const { data: newCompany, error: createError } = await supabase
+          .from('companies')
+          .insert([{
+            name: companySettings.companyName,
+            website: companySettings.website,
+            phone: companySettings.phone,
+            address: companySettings.address,
+            logo_url: companySettings.logoUrl
+          }])
+          .select()
+          .single();
+        
+        if (createError) {
+          throw createError;
+        }
+        
+        companyId = newCompany.id;
+        
+        const { error: updateUserError } = await supabase
+          .from('users')
+          .update({ company_id: companyId })
+          .eq('id', user.id);
+        
+        if (updateUserError) {
+          throw updateUserError;
+        }
+        
+        setCompanyId(companyId);
+      } else {
+        const { error: updateCompanyError } = await supabase
+          .from('companies')
+          .update({
+            name: companySettings.companyName,
+            website: companySettings.website,
+            phone: companySettings.phone,
+            address: companySettings.address,
+            logo_url: companySettings.logoUrl
+          })
+          .eq('id', companyId);
+        
+        if (updateCompanyError) {
+          throw updateCompanyError;
+        }
+      }
       
       toast.success("Company settings saved successfully");
     } catch (error) {
@@ -205,6 +256,7 @@ const Settings = () => {
       
       const notificationData = {
         user_id: user.id,
+        company_id: companyId,
         notification_email: notifications.emailNotifications,
         order_updates: notifications.orderUpdates,
         video_uploads: notifications.videoUploads,
