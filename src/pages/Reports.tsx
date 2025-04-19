@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,9 +22,16 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/sonner";
 
+interface CompanyStats {
+  totalOrders: number;
+  videoCompletionRate: number;
+  issuesReported: number;
+  avgResponseTime: number;
+}
+
 const Reports = () => {
   const [timeframe, setTimeframe] = useState("month");
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<CompanyStats>({
     totalOrders: 0,
     videoCompletionRate: 0,
     issuesReported: 0,
@@ -33,13 +39,13 @@ const Reports = () => {
   });
   const [loading, setLoading] = useState(true);
 
-  // Fetch user-specific report data
+  // Fetch company-specific report data
   useEffect(() => {
-    const fetchUserStats = async () => {
+    const fetchCompanyStats = async () => {
       try {
         setLoading(true);
         
-        // Get the current user's ID
+        // Get the current user and their company
         const { data: { user } } = await supabase.auth.getUser();
         
         if (!user) {
@@ -47,16 +53,29 @@ const Reports = () => {
           toast.error("Please log in to view your reports");
           return;
         }
+
+        // First get the user's company_id
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('company_id')
+          .eq('id', user.id)
+          .single();
         
-        // Fetch orders for this specific user
+        if (userError || !userData?.company_id) {
+          console.error("Error fetching user company:", userError);
+          toast.error("Could not fetch company information");
+          return;
+        }
+
+        // Fetch orders for this specific company
         const { data: orders, error } = await supabase
           .from('orders')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('company_id', userData.company_id);
         
         if (error) throw error;
         
-        // Calculate stats based on user-specific data
+        // Calculate stats based on company-specific data
         const totalOrders = orders?.length || 0;
         const videosReceived = orders?.filter(order => order.status === "Video Received").length || 0;
         
@@ -73,14 +92,14 @@ const Reports = () => {
         });
         
       } catch (error) {
-        console.error("Error fetching user stats:", error);
+        console.error("Error fetching company stats:", error);
         toast.error("Failed to load report data");
       } finally {
         setLoading(false);
       }
     };
     
-    fetchUserStats();
+    fetchCompanyStats();
   }, []);
 
   return (

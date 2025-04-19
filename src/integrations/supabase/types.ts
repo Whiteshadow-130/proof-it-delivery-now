@@ -9,10 +9,44 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      companies: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          phone?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          phone?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       orders: {
         Row: {
           awb: string
           channel: string | null
+          company_id: string | null
           created_at: string
           customer_mobile: string
           customer_name: string
@@ -26,6 +60,7 @@ export type Database = {
         Insert: {
           awb: string
           channel?: string | null
+          company_id?: string | null
           created_at?: string
           customer_mobile: string
           customer_name: string
@@ -39,6 +74,7 @@ export type Database = {
         Update: {
           awb?: string
           channel?: string | null
+          company_id?: string | null
           created_at?: string
           customer_mobile?: string
           customer_name?: string
@@ -49,7 +85,15 @@ export type Database = {
           verified?: boolean
           video_uploaded?: boolean
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       reports: {
         Row: {
@@ -91,6 +135,7 @@ export type Database = {
       }
       settings: {
         Row: {
+          company_id: string | null
           created_at: string
           id: string
           notification_email: boolean | null
@@ -100,6 +145,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           id?: string
           notification_email?: boolean | null
@@ -109,6 +155,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           id?: string
           notification_email?: boolean | null
@@ -119,6 +166,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "settings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -127,9 +181,54 @@ export type Database = {
           },
         ]
       }
+      team_members: {
+        Row: {
+          company_id: string
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          role: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id?: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           amount: number
+          company_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -140,6 +239,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          company_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -150,6 +250,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          company_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -159,6 +260,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "transactions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "transactions_user_id_fkey"
             columns: ["user_id"]
@@ -171,6 +279,7 @@ export type Database = {
       users: {
         Row: {
           avatar_url: string | null
+          company_id: string | null
           created_at: string
           email: string
           full_name: string | null
@@ -179,6 +288,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          company_id?: string | null
           created_at?: string
           email: string
           full_name?: string | null
@@ -187,13 +297,22 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          company_id?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
           id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "users_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
