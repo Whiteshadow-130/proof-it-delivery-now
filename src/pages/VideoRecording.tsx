@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import OtpVerification from "@/components/verification/OtpVerification";
 import Instructions from "@/components/video/Instructions";
@@ -40,6 +40,7 @@ const VideoRecording = () => {
     retakeVideo
   } = useVideoRecorder(streamRef, videoRef);
 
+  // Check if order exists and if video already uploaded
   useEffect(() => {
     checkVideoUploaded();
     fetchOrderDetails();
@@ -78,9 +79,11 @@ const VideoRecording = () => {
         return;
       }
 
+      console.log("Found order data:", data);
       setOrderData(data);
       
       if (data.verified) {
+        console.log("Order is already verified");
         setVerified(true);
         setStep("instructions");
       }
@@ -91,12 +94,14 @@ const VideoRecording = () => {
   };
 
   const handleVerificationSuccess = () => {
+    console.log("Verification successful");
     setVerified(true);
     setStep("instructions");
     toast.success("Verification successful. You can now record your video.");
   };
 
   const startCountdown = async () => {
+    console.log("Starting countdown");
     if (!verified) {
       toast.error("Verification required. Please verify your mobile number before recording a video.");
       return;
@@ -107,8 +112,12 @@ const VideoRecording = () => {
       return;
     }
     
+    console.log("Requesting camera permission");
     const hasAccess = await requestCameraPermission();
-    if (!hasAccess) return;
+    if (!hasAccess) {
+      console.error("Camera access denied");
+      return;
+    }
 
     setStep("countdown");
     
@@ -122,6 +131,7 @@ const VideoRecording = () => {
       if (count <= 0) {
         clearInterval(countdownInterval);
         setStep("recording");
+        console.log("Starting recording");
         startRecording();
       }
     }, 1000);
@@ -131,23 +141,51 @@ const VideoRecording = () => {
     setStep("uploading");
     setUploadProgress(0);
     
-    const interval = setInterval(async () => {
-      setUploadProgress(prev => {
-        const newProgress = prev + Math.random() * 10;
-        if (newProgress >= 100) {
-          clearInterval(interval);
+    try {
+      // Simulate upload for demo
+      const interval = setInterval(async () => {
+        setUploadProgress(prev => {
+          const newProgress = prev + Math.random() * 10;
+          if (newProgress >= 100) {
+            clearInterval(interval);
+            
+            updateVideoStatus();
+            
+            setTimeout(() => {
+              navigate(`/thank-you?order=${orderNumber}`);
+            }, 500);
+            
+            return 100;
+          }
+          return newProgress;
+        });
+      }, 300);
+      
+      // In a real implementation, we would upload the video to Supabase storage here
+      if (recordedVideo) {
+        // Fetch the video blob
+        const response = await fetch(recordedVideo);
+        const blob = await response.blob();
+        
+        // Upload to Supabase storage
+        const fileName = `${Date.now()}_${orderNumber}.webm`;
+        const filePath = `${orderNumber}/${fileName}`;
+        
+        const { error } = await supabase.storage
+          .from('videos')
+          .upload(filePath, blob, {
+            contentType: 'video/webm',
+          });
           
-          updateVideoStatus();
-          
-          setTimeout(() => {
-            navigate(`/thank-you?order=${orderNumber}`);
-          }, 500);
-          
-          return 100;
+        if (error) {
+          console.error("Error uploading video:", error);
+          toast.error("Video upload failed, but we've saved your verification status.");
         }
-        return newProgress;
-      });
-    }, 300);
+      }
+    } catch (error) {
+      console.error("Error in uploadVideo:", error);
+      toast.error("An error occurred during upload.");
+    }
   };
 
   const updateVideoStatus = async () => {
@@ -168,6 +206,8 @@ const VideoRecording = () => {
       toast.error("Failed to update video status");
     }
   };
+
+  console.log("Current step:", step);
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

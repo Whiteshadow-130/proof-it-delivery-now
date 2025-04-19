@@ -6,7 +6,7 @@ import {
   InputOTPGroup, 
   InputOTPSlot 
 } from "@/components/ui/input-otp";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import { CheckCircle, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -75,10 +75,32 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
       // In development mode, we're using a fixed OTP (123456)
       console.log("Generated OTP:", DEMO_OTP); // For demo purposes only
       
+      // Insert OTP into verification table
+      if (customerMobile) {
+        // Get order id from order_number
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('order_number', orderNumber)
+          .single();
+          
+        if (!orderError && orderData) {
+          const { error: verificationError } = await supabase
+            .from('mobile_verifications')
+            .insert({
+              order_id: orderData.id,
+              phone_number: customerMobile,
+              verification_code: DEMO_OTP,
+            });
+            
+          if (verificationError) console.error("Error logging verification:", verificationError);
+        }
+      }
+      
       setOtpSent(true);
       setCountdown(30);
       
-      toast.success(`OTP sent to your mobile XXXXX${customerMobile?.slice(-5) || "XXXXX"}`);
+      toast.success(`OTP sent to your mobile ${customerMobile ? `XXXXX${customerMobile.slice(-5)}` : "XXXXX"}`);
     } catch (error) {
       toast.error("Failed to send OTP. Please try again.");
     } finally {
@@ -125,7 +147,7 @@ const OtpVerification = ({ orderNumber, onVerificationSuccess }: OtpVerification
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-white rounded-lg p-6 shadow-md">
       <div className="text-center">
         <h2 className="text-xl font-semibold">Verify Your Mobile Number</h2>
         <p className="text-gray-600 mt-2">

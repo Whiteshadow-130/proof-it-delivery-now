@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, Package, ArrowRight } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 import OtpVerification from "@/components/verification/OtpVerification";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -48,6 +48,7 @@ const OrderDetails = () => {
         return;
       }
 
+      console.log("Found order data:", data);
       setOrderData(data);
 
       // Check if order is already verified

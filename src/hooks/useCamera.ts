@@ -1,6 +1,6 @@
 
 import { useState, useRef, useEffect } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/sonner";
 
 export const useCamera = () => {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -24,19 +24,37 @@ export const useCamera = () => {
           { facingMode: "environment" }
       };
       
+      console.log("Requesting camera with constraints:", constraints);
+      
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      console.log("Got camera stream:", stream);
       streamRef.current = stream;
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.style.display = 'block'; // Ensure video element is visible
         
-        videoRef.current.onloadedmetadata = async () => {
+        await new Promise<void>((resolve) => {
+          if (!videoRef.current) {
+            resolve();
+            return;
+          }
+          
+          videoRef.current.onloadedmetadata = () => {
+            console.log("Video metadata loaded");
+            resolve();
+          };
+        });
+        
+        if (videoRef.current) {
           try {
-            await videoRef.current?.play();
+            await videoRef.current.play();
+            console.log("Video is playing");
           } catch (e) {
             console.error("Error playing video:", e);
           }
-        };
+        }
       }
       
       setHasPermission(true);
@@ -44,24 +62,43 @@ export const useCamera = () => {
       return true;
     } catch (err) {
       console.error("Error starting camera stream:", err);
+      
+      // Try with basic constraints as fallback
       try {
+        console.log("Falling back to basic video constraints");
         const simpleConstraints: MediaStreamConstraints = {
           audio: true,
           video: true
         };
         
         const stream = await navigator.mediaDevices.getUserMedia(simpleConstraints);
+        console.log("Got fallback camera stream:", stream);
         streamRef.current = stream;
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
-          videoRef.current.onloadedmetadata = async () => {
-            try {
-              await videoRef.current?.play();
-            } catch (e) {
-              console.error("Error playing video with fallback:", e);
+          videoRef.current.style.display = 'block';
+          
+          await new Promise<void>((resolve) => {
+            if (!videoRef.current) {
+              resolve();
+              return;
             }
-          };
+            
+            videoRef.current.onloadedmetadata = () => {
+              console.log("Fallback video metadata loaded");
+              resolve();
+            };
+          });
+          
+          if (videoRef.current) {
+            try {
+              await videoRef.current.play();
+              console.log("Fallback video is playing");
+            } catch (e) {
+              console.error("Error playing fallback video:", e);
+            }
+          }
         }
         
         setHasPermission(true);
@@ -70,7 +107,8 @@ export const useCamera = () => {
       } catch (fallbackErr) {
         console.error("Fallback camera access also failed:", fallbackErr);
         setHasPermission(false);
-        setPermissionError("Camera access failed. Please check your device permissions.");
+        setPermissionError("Camera access failed. Please check your device permissions and ensure no other apps are using your camera.");
+        toast.error("Camera access failed. Please check your permissions.");
         return false;
       }
     }
@@ -78,8 +116,11 @@ export const useCamera = () => {
 
   const requestCameraPermission = async () => {
     try {
+      console.log("Requesting camera devices");
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
+      console.log("Available video devices:", videoDevices);
+      
       setCameras(videoDevices);
       
       const backCameraIndex = videoDevices.findIndex(
@@ -90,6 +131,7 @@ export const useCamera = () => {
       const initialCameraIndex = backCameraIndex !== -1 ? backCameraIndex : 0;
       setCurrentCameraIndex(initialCameraIndex);
       
+      // Start with selected camera or default
       return await startCameraStream(videoDevices[initialCameraIndex]?.deviceId);
     } catch (err) {
       console.error("Error accessing camera:", err);
@@ -107,6 +149,7 @@ export const useCamera = () => {
     }
     
     const nextCameraIndex = (currentCameraIndex + 1) % cameras.length;
+    console.log(`Switching from camera ${currentCameraIndex} to ${nextCameraIndex}`);
     
     try {
       if (streamRef.current) {
@@ -128,6 +171,7 @@ export const useCamera = () => {
   useEffect(() => {
     return () => {
       if (streamRef.current) {
+        console.log("Cleaning up camera stream");
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };

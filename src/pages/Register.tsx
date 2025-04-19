@@ -1,10 +1,10 @@
+
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { AlertCircle } from "lucide-react";
-import { toast } from "@/components/ui/sonner";
+import { useAuth } from "@/context/AuthContext";
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -14,8 +14,7 @@ const Register = () => {
     password: "",
     confirmPassword: "",
   });
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const { signUp, loading } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -27,34 +26,18 @@ const Register = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-
+    
     if (formData.password !== formData.confirmPassword) {
-      toast.error("Passwords don't match", {
-        description: "Please make sure your passwords match",
-        icon: <AlertCircle className="h-5 w-5" />,
-      });
-      setLoading(false);
+      // Show error - handled by AuthContext
       return;
     }
 
-    // Mock registration - would connect to Supabase auth in a real implementation
-    try {
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
-      toast.success("Registration successful", {
-        description: "Your account has been created. Welcome to Proof-It!",
-      });
-      navigate("/dashboard");
-    } catch (error) {
-      toast.error("Registration failed", {
-        description: "An error occurred. Please try again.",
-        icon: <AlertCircle className="h-5 w-5" />,
-      });
-    } finally {
-      setLoading(false);
-    }
+    await signUp(
+      formData.email,
+      formData.password,
+      formData.fullName,
+      formData.companyName
+    );
   };
 
   return (

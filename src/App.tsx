@@ -18,6 +18,8 @@ import QrCodes from "./pages/QrCodes";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import VideoProof from "./pages/VideoProof";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -27,22 +29,69 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/dashboard" element={<SellerDashboard />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/qr-codes" element={<QrCodes />} />
-          <Route path="/wallet" element={<Wallet />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/proof" element={<OrderDetails />} />
-          <Route path="/record" element={<VideoRecording />} />
-          <Route path="/thank-you" element={<ThankYou />} />
-          <Route path="/video-proof" element={<VideoProof />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            
+            {/* Protected seller/admin routes */}
+            <Route path="/dashboard" element={
+              <ProtectedRoute>
+                <SellerDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/orders" element={
+              <ProtectedRoute>
+                <Orders />
+              </ProtectedRoute>
+            } />
+            <Route path="/qr-codes" element={
+              <ProtectedRoute>
+                <QrCodes />
+              </ProtectedRoute>
+            } />
+            <Route path="/wallet" element={
+              <ProtectedRoute>
+                <Wallet />
+              </ProtectedRoute>
+            } />
+            <Route path="/reports" element={
+              <ProtectedRoute>
+                <Reports />
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            } />
+            <Route path="/video-proof" element={
+              <ProtectedRoute>
+                <VideoProof />
+              </ProtectedRoute>
+            } />
+            
+            {/* Public routes for customer video recording */}
+            <Route path="/proof" element={
+              <ProtectedRoute allowUnauthenticated={true}>
+                <OrderDetails />
+              </ProtectedRoute>
+            } />
+            <Route path="/record" element={
+              <ProtectedRoute allowUnauthenticated={true}>
+                <VideoRecording />
+              </ProtectedRoute>
+            } />
+            <Route path="/thank-you" element={
+              <ProtectedRoute allowUnauthenticated={true}>
+                <ThankYou />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
