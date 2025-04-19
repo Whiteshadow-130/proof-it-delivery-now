@@ -1,29 +1,13 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase, createCompany, createUser, getUserByEmail } from '@/integrations/supabase/client';
+import { supabase, ensureUserExists } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
-import { v4 as uuidv4 } from 'uuid';
-
-// Define simple user type for our app
-interface AppUser {
-  id: string;
-  email: string;
-  full_name?: string | null;
-  avatar_url?: string | null;
-  company_id?: string | null;
-  companies?: {
-    name: string;
-    website?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    logo_url?: string | null;
-  } | null;
-}
+import { Session, User } from '@supabase/supabase-js';
 
 interface AuthContextType {
-  user: AppUser | null;
-  session: boolean; // Simplified session concept (just logged in or not)
+  user: User | null;
+  session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string, companyName: string) => Promise<void>;
@@ -33,43 +17,70 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Local storage keys
-const USER_STORAGE_KEY = 'app_user';
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [session, setSession] = useState<boolean>(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Initialize auth from local storage
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        console.log('Auth state changed:', event);
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (event === 'SIGNED_IN') {
+          setTimeout(async () => {
+            console.log('Ensuring user exists after SIGNED_IN event');
+            const userData = await ensureUserExists();
+            if (!userData) {
+              console.warn('User authenticated but profile data could not be created/verified');
+              toast.error('There was a problem with your account setup', {
+                description: 'Please try signing out and back in'
+              });
+            } else {
+              console.log('User data verified after sign in:', userData);
+              
+              // If coming from login page, redirect to dashboard
+              if (location.pathname === '/login' || location.pathname === '/register') {
+                navigate('/dashboard');
+              }
+            }
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          navigate('/login');
+        }
+      }
+    );
+
     const initializeAuth = async () => {
       try {
-        const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
         
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setUser(parsedUser);
-          setSession(true);
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          console.log('Ensuring user exists during initialization');
+          const userData = await ensureUserExists();
           
-          // Verify user still exists in DB (optional validation)
-          const dbUser = await getUserByEmail(parsedUser.email);
-          if (!dbUser) {
-            console.warn('User not found in database, logging out');
-            localStorage.removeItem(USER_STORAGE_KEY);
-            setUser(null);
-            setSession(false);
+          if (!userData) {
+            console.warn('User authenticated but profile data could not be created/verified on init');
             
+            // If on a protected page, redirect to login
             if (location.pathname !== '/login' && location.pathname !== '/register' && 
                 location.pathname !== '/' && !location.pathname.startsWith('/proof')) {
+              toast.error('Account setup incomplete', { 
+                description: 'Please log in again to complete setup' 
+              });
+              await supabase.auth.signOut();
               navigate('/login');
             }
+          } else {
+            console.log('User data verified on init:', userData);
           }
-        } else if (location.pathname !== '/login' && location.pathname !== '/register' && 
-                  location.pathname !== '/' && !location.pathname.startsWith('/proof')) {
-          navigate('/login');
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
@@ -79,67 +90,68 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     initializeAuth();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate, location.pathname]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      setLoading(true);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      // For simplicity, we're not checking passwords in this version
-      // In a real app, you would never store passwords in the database directly
-      const userData = await getUserByEmail(email);
-
-      if (!userData) {
-        throw new Error('User not found');
-      }
-
-      // Store user in local storage
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
-      setUser(userData);
-      setSession(true);
+      if (error) throw error;
       
       toast.success('Login successful');
       
       const origin = location.state?.from?.pathname || '/dashboard';
       navigate(origin);
+      
+      const userData = await ensureUserExists();
+      
+      if (!userData) {
+        console.warn("User authenticated but profile data could not be verified");
+        toast.error('There was a problem with your account setup', {
+          description: 'Please refresh or contact support if issues persist'
+        });
+      }
     } catch (error: any) {
       toast.error('Login failed', {
         description: error.message || 'Please check your credentials',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string, fullName: string, companyName: string) => {
     try {
-      setLoading(true);
-      
-      // Check if user already exists
-      const existingUser = await getUserByEmail(email);
-      if (existingUser) {
-        throw new Error('User with this email already exists');
-      }
-      
-      // Generate a UUID for the new user
-      const userId = uuidv4();
-      
-      // Create company first
-      const companyId = await createCompany(companyName);
-      if (!companyId) {
-        throw new Error('Failed to create company');
-      }
-      
-      // Create user with reference to company
-      const newUser = await createUser(userId, email, fullName, companyId);
-      if (!newUser) {
-        throw new Error('Failed to create user');
-      }
+      // First, create the auth user
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            company_name: companyName,
+          },
+          // Don't automatically sign in after registration
+          emailRedirectTo: `${window.location.origin}/login`
+        },
+      });
+
+      if (error) throw error;
+
+      // Don't try to immediately create the user record here
+      // Wait for verification instead
       
       toast.success('Account created successfully', {
-        description: 'You can now log in with your email',
+        description: 'Please check your email for verification and then log in',
       });
       
+      // Sign out the user to complete registration flow
+      await supabase.auth.signOut();
       navigate('/login');
     } catch (error: any) {
       console.error("Registration error:", error);
@@ -147,16 +159,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         description: error.message || 'Please try again with different details',
       });
       throw error; // Re-throw to be caught by the form handler
-    } finally {
-      setLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
-      localStorage.removeItem(USER_STORAGE_KEY);
-      setUser(null);
-      setSession(false);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       navigate('/login');
     } catch (error: any) {
       toast.error('Sign out failed', {
