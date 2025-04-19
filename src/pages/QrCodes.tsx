@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -40,20 +39,28 @@ const QrCodes = () => {
     }
   }, [location.search]);
 
-  // Fetch QR codes from Supabase
   useEffect(() => {
     const fetchQrCodes = async () => {
       try {
         setLoading(true);
         
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.error("No authenticated user found");
+          toast.error("Please log in to view your QR codes");
+          navigate("/login");
+          return;
+        }
+        
         const { data: orders, error } = await supabase
           .from('orders')
           .select('*')
+          .eq('user_id', user.id)
           .order('created_at', { ascending: false });
         
         if (error) throw error;
         
-        // Transform the data to match our QrCode interface
         const transformedQrCodes = orders.map(order => ({
           id: `QR-${order.order_number.split('-')[1]}`,
           orderId: order.order_number,
@@ -100,24 +107,34 @@ const QrCodes = () => {
     setNewOrderDialog(true);
   };
 
-  const handleNewOrderSubmit = (orderData) => {
-    const newQrCode = {
-      id: `QR-${orderData.id.split('-')[1]}`,
-      orderId: orderData.id,
-      awb: orderData.awb,
-      customer: orderData.customerName,
-      customerMobile: orderData.customerMobile,
-      date: new Date().toISOString().split('T')[0],
-      url: `${window.location.origin}/proof?order=${orderData.id}`,
-    };
-    
-    // Add the new QR code to the state
-    setQrCodes([newQrCode, ...qrCodes]);
-    
-    toast.success(`QR code generated for order ${orderData.id}`);
+  const handleNewOrderSubmit = async (orderData) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("You must be logged in to create orders");
+        return;
+      }
+      
+      const newQrCode = {
+        id: `QR-${orderData.id.split('-')[1]}`,
+        orderId: orderData.id,
+        awb: orderData.awb,
+        customer: orderData.customerName,
+        customerMobile: orderData.customerMobile,
+        date: new Date().toISOString().split('T')[0],
+        url: `${window.location.origin}/proof?order=${orderData.id}`,
+      };
+      
+      setQrCodes([newQrCode, ...qrCodes]);
+      
+      toast.success(`QR code generated for order ${orderData.id}`);
+    } catch (error) {
+      console.error("Error creating new order:", error);
+      toast.error("Failed to create new order");
+    }
   };
 
-  // Function to generate QR code for a specific order in the Orders page
   const handleGenerateQRForOrder = async (orderId: string) => {
     try {
       const { data: order, error } = await supabase
@@ -129,7 +146,6 @@ const QrCodes = () => {
       if (error) throw error;
       
       if (order) {
-        // Navigate to QR codes page with this specific order
         navigate(`/qr-codes?order=${order.order_number}`);
       } else {
         toast.error("Order not found");

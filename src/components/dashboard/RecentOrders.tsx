@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download } from "lucide-react";
@@ -25,9 +24,21 @@ const RecentOrders = () => {
     const fetchRecentOrders = async () => {
       try {
         setLoading(true);
+        
+        // Get the current user's ID
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.error("No authenticated user found");
+          // Continue to render UI with empty state
+          setLoading(false);
+          return;
+        }
+        
         const { data, error } = await supabase
           .from('orders')
           .select('*')
+          .eq('user_id', user.id)  // Filter by the current user's ID
           .order('created_at', { ascending: false })
           .limit(5);
         
@@ -45,44 +56,8 @@ const RecentOrders = () => {
         setOrders(transformedOrders);
       } catch (error) {
         console.error("Error fetching recent orders:", error);
-        // Fallback to mock data if there's an error
-        setOrders([
-          {
-            id: "ORD-12345",
-            awb: "AWB123456789",
-            customer: "John Doe",
-            date: "2025-04-15",
-            status: "Video Received",
-          },
-          {
-            id: "ORD-12346",
-            awb: "AWB123456790",
-            customer: "Jane Smith",
-            date: "2025-04-15",
-            status: "QR Generated",
-          },
-          {
-            id: "ORD-12347",
-            awb: "AWB123456791",
-            customer: "Bob Johnson",
-            date: "2025-04-14",
-            status: "Video Received",
-          },
-          {
-            id: "ORD-12348",
-            awb: "AWB123456792",
-            customer: "Alice Brown",
-            date: "2025-04-14",
-            status: "Video Pending",
-          },
-          {
-            id: "ORD-12349",
-            awb: "AWB123456793",
-            customer: "Charlie Wilson",
-            date: "2025-04-13",
-            status: "Video Received",
-          },
-        ]);
+        // Fallback to empty state if there's an error
+        setOrders([]);
       } finally {
         setLoading(false);
       }

@@ -142,35 +142,25 @@ const VideoRecording = () => {
     setUploadProgress(0);
     
     try {
-      // Simulate upload for demo
-      const interval = setInterval(async () => {
-        setUploadProgress(prev => {
-          const newProgress = prev + Math.random() * 10;
-          if (newProgress >= 100) {
-            clearInterval(interval);
-            
-            updateVideoStatus();
-            
-            setTimeout(() => {
-              navigate(`/thank-you?order=${orderNumber}`);
-            }, 500);
-            
-            return 100;
-          }
-          return newProgress;
-        });
-      }, 300);
-      
-      // In a real implementation, we would upload the video to Supabase storage here
-      if (recordedVideo) {
+      // Upload to Supabase storage
+      if (recordedVideo && orderData) {
         // Fetch the video blob
         const response = await fetch(recordedVideo);
         const blob = await response.blob();
         
-        // Upload to Supabase storage
-        const fileName = `${Date.now()}_${orderNumber}.webm`;
+        // Generate a unique filename
+        const timestamp = Date.now();
+        const fileName = `${timestamp}_${orderNumber}.webm`;
         const filePath = `${orderNumber}/${fileName}`;
         
+        let uploadProgress = 0;
+        const interval = setInterval(() => {
+          uploadProgress += Math.random() * 10;
+          if (uploadProgress > 95) uploadProgress = 95;
+          setUploadProgress(uploadProgress);
+        }, 300);
+        
+        // Upload to Supabase storage
         const { error } = await supabase.storage
           .from('videos')
           .upload(filePath, blob, {
@@ -180,7 +170,18 @@ const VideoRecording = () => {
         if (error) {
           console.error("Error uploading video:", error);
           toast.error("Video upload failed, but we've saved your verification status.");
+        } else {
+          // Update order status
+          updateVideoStatus();
+          clearInterval(interval);
+          setUploadProgress(100);
+          
+          setTimeout(() => {
+            navigate(`/thank-you?order=${orderNumber}`);
+          }, 500);
         }
+      } else {
+        toast.error("No video recorded or order information missing");
       }
     } catch (error) {
       console.error("Error in uploadVideo:", error);

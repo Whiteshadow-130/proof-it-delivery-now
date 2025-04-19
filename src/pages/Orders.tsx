@@ -36,14 +36,27 @@ const Orders = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // Fetch orders from Supabase
+  // Fetch orders from Supabase with user filtering
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         setLoading(true);
+        
+        // Get the current user's ID
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          console.error("No authenticated user found");
+          toast.error("Please log in to view your orders");
+          navigate("/login");
+          return;
+        }
+        
+        // Query orders filtered by the current user's ID
         const { data, error } = await supabase
           .from('orders')
           .select('*')
+          .eq('user_id', user.id)  // Filter by the current user's ID
           .order('created_at', { ascending: false });
         
         if (error) throw error;
@@ -71,18 +84,31 @@ const Orders = () => {
     fetchOrders();
   }, []);
 
-  // Add a new order
-  const addNewOrder = (orderData) => {
-    // Add the new order to the orders array
-    setOrders([{
-      id: orderData.id,
-      awb: orderData.awb,
-      customer: orderData.customerName,
-      customerMobile: orderData.customerMobile,
-      date: orderData.date,
-      status: orderData.status,
-      channel: orderData.channel
-    }, ...orders]);
+  // Add a new order that's linked to the current user
+  const addNewOrder = async (orderData) => {
+    try {
+      // Get the current user's ID
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("You must be logged in to create orders");
+        return;
+      }
+      
+      // Add the new order to the orders array
+      setOrders([{
+        id: orderData.id,
+        awb: orderData.awb,
+        customer: orderData.customerName,
+        customerMobile: orderData.customerMobile,
+        date: orderData.date,
+        status: orderData.status,
+        channel: orderData.channel
+      }, ...orders]);
+    } catch (error) {
+      console.error("Error creating new order:", error);
+      toast.error("Failed to create new order");
+    }
   };
 
   // Handle view actions

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import {
   Dialog,
@@ -53,10 +52,19 @@ const NewOrderDialog = ({ open, onOpenChange, onSubmit }: NewOrderDialogProps) =
     setLoading(true);
     
     try {
+      // Get the current user's ID
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("You must be logged in to create orders");
+        setLoading(false);
+        return;
+      }
+      
       // Generate a unique order number
       const orderNumber = `ORD-${Math.floor(10000 + Math.random() * 90000)}`;
       
-      // Save to Supabase
+      // Save to Supabase with user_id
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -65,7 +73,8 @@ const NewOrderDialog = ({ open, onOpenChange, onSubmit }: NewOrderDialogProps) =
           customer_name: customerName,
           customer_mobile: customerMobile,
           channel: channel,
-          status: 'QR Generated'
+          status: 'QR Generated',
+          user_id: user.id  // Associate order with current user
         })
         .select()
         .single();

@@ -56,7 +56,7 @@ const OrderDetails = () => {
         setVerified(true);
         setStep("ready");
       } else {
-        // Move to OTP step if mobile number exists
+        // Move to OTP step if mobile number exists, but don't send OTP automatically
         setStep(data.customer_mobile ? "otp" : "order");
       }
     } catch (error) {
