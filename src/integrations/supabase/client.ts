@@ -104,3 +104,44 @@ export const getUserByEmail = async (email: string) => {
     return null;
   }
 };
+
+/**
+ * Ensures that a user exists in the database
+ * This is used to establish or verify user records during login/session init
+ * @returns The user data or null if there was an error
+ */
+export const ensureUserExists = async () => {
+  try {
+    // We can't get the session directly from supabase.auth in our implementation
+    // since we've moved to a direct DB approach without Supabase Auth.
+    // Instead, we'll check if the user is stored in localStorage using our app's key
+
+    const userStorageKey = 'app_user';
+    const storedUser = localStorage.getItem(userStorageKey);
+    
+    if (!storedUser) {
+      console.error('No user found in local storage');
+      return null;
+    }
+    
+    const user = JSON.parse(storedUser);
+    
+    if (!user || !user.email) {
+      console.error('Invalid user data in local storage');
+      return null;
+    }
+    
+    // Check if user exists in the database
+    const userData = await getUserByEmail(user.email);
+    
+    if (!userData) {
+      console.error('User not found in database');
+      return null;
+    }
+    
+    return userData;
+  } catch (error) {
+    console.error('Exception in ensureUserExists:', error);
+    return null;
+  }
+};
