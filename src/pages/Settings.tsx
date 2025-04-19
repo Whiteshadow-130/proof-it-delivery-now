@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +64,7 @@ const Settings = () => {
       try {
         setLoading(true);
         
+        // Ensure user exists in our database first
         const userData = await ensureUserExists();
         
         if (!userData) {
@@ -88,6 +90,7 @@ const Settings = () => {
             companyData = company;
           }
           
+          // Fetch team members if company_id exists
           fetchTeamMembers(userData.company_id);
         }
         
@@ -182,6 +185,7 @@ const Settings = () => {
 
   const handleSaveCompanySettings = async () => {
     try {
+      // Ensure user exists in our database
       const userData = await ensureUserExists();
       
       if (!userData) {
@@ -194,6 +198,7 @@ const Settings = () => {
       let currentCompanyId = userData?.company_id;
       
       if (!currentCompanyId) {
+        // Create a new company if one doesn't exist
         const { data: newCompany, error: createError } = await supabase
           .from('companies')
           .insert([{
@@ -216,6 +221,7 @@ const Settings = () => {
         
         currentCompanyId = newCompany.id;
         
+        // Update the user with the new company_id
         const { error: updateUserError } = await supabase
           .from('users')
           .update({ company_id: currentCompanyId })
@@ -231,6 +237,7 @@ const Settings = () => {
         
         setCompanyId(currentCompanyId);
       } else {
+        // Update existing company
         const { error: updateCompanyError } = await supabase
           .from('companies')
           .update({
@@ -264,6 +271,7 @@ const Settings = () => {
 
   const handleSaveNotifications = async () => {
     try {
+      // Ensure user exists in our database
       const userData = await ensureUserExists();
       
       if (!userData) {
@@ -283,6 +291,7 @@ const Settings = () => {
         marketing_emails: notifications.marketingEmails,
       };
       
+      // Check if settings already exist for this user
       const { data: existingSettings } = await supabase
         .from('settings')
         .select('id')
@@ -292,11 +301,13 @@ const Settings = () => {
       let result;
       
       if (existingSettings) {
+        // Update existing settings
         result = await supabase
           .from('settings')
           .update(notificationData)
           .eq('user_id', userData.id);
       } else {
+        // Create new settings
         result = await supabase
           .from('settings')
           .insert([notificationData]);

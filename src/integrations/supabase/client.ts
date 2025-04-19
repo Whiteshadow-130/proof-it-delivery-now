@@ -20,6 +20,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 /**
  * Ensures that the authenticated user exists in the users table.
  * This function should be called after authentication.
+ * @returns The user data from the users table, or null if there was an error
  */
 export const ensureUserExists = async () => {
   try {
@@ -37,7 +38,7 @@ export const ensureUserExists = async () => {
       .eq('id', user.id)
       .maybeSingle();
     
-    if (checkError && checkError.code !== 'PGRST116') {
+    if (checkError) {
       console.error('Error checking if user exists:', checkError);
       return null;
     }

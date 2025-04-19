@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, ensureUserExists } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import { Session, User } from '@supabase/supabase-js';
 
@@ -27,11 +27,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // First set up the auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, currentSession) => {
+      async (event, currentSession) => {
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
         
-        if (event === 'SIGNED_OUT') {
+        if (event === 'SIGNED_IN') {
+          // Ensure user exists in users table after sign in
+          setTimeout(async () => {
+            await ensureUserExists();
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
           // Redirect to login page on sign out
           navigate('/login');
         }
@@ -39,9 +44,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     );
 
     // Then get the initial session
-    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
+      
+      if (currentSession?.user) {
+        // Ensure user exists in users table
+        await ensureUserExists();
+      }
+      
       setLoading(false);
     });
 
@@ -59,6 +70,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (error) throw error;
+      
+      // Ensure user data exists in our database
+      const userData = await ensureUserExists();
+      
+      if (!userData) {
+        console.warn("User authenticated but profile data could not be verified");
+      }
       
       toast.success('Login successful');
       
