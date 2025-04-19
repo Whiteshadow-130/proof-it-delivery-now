@@ -33,6 +33,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (event === 'SIGNED_IN') {
           setTimeout(async () => {
+            console.log('Ensuring user exists after SIGNED_IN event');
             const userData = await ensureUserExists();
             if (!userData) {
               console.warn('User authenticated but profile data could not be created/verified');
@@ -62,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(currentSession?.user ?? null);
         
         if (currentSession?.user) {
+          console.log('Ensuring user exists during initialization');
           const userData = await ensureUserExists();
           
           if (!userData) {
@@ -144,11 +146,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // Attempt to immediately create the user and company records even before verification
       if (data.user) {
         try {
+          console.log('Creating company and user records during registration');
+          // We need to store the user data temporarily to create the company and user records
+          const tempUser = data.user;
+          
           // This will create both company and user entries in their respective tables
-          await ensureUserExists();
-          console.log("Initial user and company records created during registration");
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+              if (event === 'SIGNED_UP') {
+                console.log('Detected SIGNED_UP event, attempting to create database records');
+                // This is a one-time operation for this specific user
+                if (session?.user?.id === tempUser.id) {
+                  await ensureUserExists();
+                  subscription.unsubscribe();
+                }
+              }
+            }
+          );
+          
+          console.log("Registration completed, database records will be created when verified");
         } catch (dbError) {
-          console.error("Failed to create initial database records:", dbError);
+          console.error("Failed to set up database record creation:", dbError);
           // Continue with registration even if this fails - will try again at login
         }
       }
